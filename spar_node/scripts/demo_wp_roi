@@ -3,6 +3,7 @@
 import sys
 from math import *
 import numpy as np
+import time
 
 import rospy
 import actionlib
@@ -270,7 +271,7 @@ def generate_waypoints(width, height, spacing, edge_offset):
     # Add the last waypoint at [0, 0, 1.25, 0]
     waypoints.append([0, 0, 1.25, 0])
 
-    rospy.loginfo(f"Waypoint List Generated: {waypoints}")
+    #rospy.loginfo(f"Waypoint List Generated: {waypoints}")
     rospy.loginfo(f"x positions: {x_points}")
     rospy.loginfo(f"y positions: {y_points}")
     
@@ -282,10 +283,8 @@ def main(args):
 
 	# List of waypoints
 	# [X, Y, Z, Yaw]
-	wps = generate_waypoints(width=8, height=5, spacing=1.5, edge_offset=1)
-	rospy.loginfo(f"wps[1] type is: {type(wps[1])}")
+	wps = generate_waypoints(width=8, height=5, spacing=1, edge_offset=1)
 
-	# Create our guidance class option
 	guide = Guidance(wps)
 
 	# Spin!
