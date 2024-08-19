@@ -154,6 +154,7 @@ class Guidance():
 		rwp = [self.current_location.x, self.current_location.y, self.current_location.z, 0.0]
 
 		# XXX: Could pause here for a moment with ( "rospy.sleep(...)" ) to make sure the UAV stops correctly
+		rospy.sleep(rospy.Duration(1))
 
 		self.send_wp(dwp)
 		self.spar_client.wait_for_result()
