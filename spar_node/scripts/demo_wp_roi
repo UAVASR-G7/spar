@@ -251,7 +251,7 @@ def generate_waypoints(width, height, spacing, edge_offset):
     waypoints = []
     
     # Add the first waypoint at [0, 0, 0, 0]
-    waypoints.append([0, 0, 1.25, 0])
+    waypoints.append([0, 0, 1.3, 0])
 
     # Adjust the grid to have the origin in the center and stay within bounds
     x_points = np.arange(-width/2 + edge_offset, width/2 - edge_offset + spacing/2, spacing)
@@ -265,11 +265,11 @@ def generate_waypoints(width, height, spacing, edge_offset):
 
     # Set the z-coordinates for the in-flight waypoints and yaw
     for i in range(1, len(waypoints)):  # Start from index 1 to skip the first waypoint
-        waypoints[i][2] = 1.25  # Set altitude to 1.25m
+        waypoints[i][2] = 1.3  # Set altitude to 1.25m
         waypoints[i][3] = 0.0   # Set constant yaw
 
     # Add the last waypoint at [0, 0, 1.25, 0]
-    waypoints.append([0, 0, 1.25, 0])
+    waypoints.append([0, 0, 1.3, 0])
 
     #rospy.loginfo(f"Waypoint List Generated: {waypoints}")
     rospy.loginfo(f"x positions: {x_points}")
