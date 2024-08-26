@@ -8,8 +8,9 @@ import time
 import rospy
 import actionlib
 from actionlib_msgs.msg import GoalStatus
-from geometry_msgs.msg import Point, PoseStamped
+from geometry_msgs.msg import Point, PoseStamped, Pose
 from spar_msgs.msg import FlightMotionAction, FlightMotionGoal
+from breadcrumb.srv import RequestPath, RequestPathRequest
 
 # This is getting a bit more complicated now, so we'll put our information in
 # a class to keep track of all of our variables. This is not so much different
@@ -163,6 +164,8 @@ class Guidance():
 
 		rospy.loginfo("Reached diversion ROI!")
 		# XXX: Do something?
+		# set msg_in to 0
+		# rostopic pub /actuator_control/actuator_a std_msgs/UInt16 '{data:1,2,3}'
 		rospy.sleep(rospy.Duration(10))
 
 		rospy.loginfo("Returning to flight plan...")
@@ -277,15 +280,80 @@ def generate_waypoints(width, height, spacing, edge_offset):
     
     return waypoints
 
+# This parses the waypoints using the breadcrumb node 
+def path_planning(waypoints):
+
+	# Setup ROS
+	rospy.init_node('path_planner', anonymous=True)
+
+	rospy.wait_for_service('/breadcrumb/request_path')
+	srvc_bc = rospy.ServiceProxy('/breadcrumb/request_path',RequestPath)
+
+	wps = [] # initialise wps list
+
+	# Loop through the list of waypoints
+	for i in range(0,len(waypoints)-2,2):
+		# Set up a path request for breadcrumb
+		# obstacles are assumed to be generated such that they'll interefere with waypoints, hence
+		# breadcrumb will not find a path if the end position is within an obstacle, however, if the
+		# entire list is sent at once (end position in corner), then A* algorithm will not search
+		# entire area. Need to find middle ground such that breadcrumb will not default on errer & drone
+		# will search entire area. 
+		# 1) try sending 3 wps to breadcrumb at once
+		req = RequestPathRequest()
+
+		# Set start and end point
+		req.start.x = waypoints[i][0]
+		req.start.y = waypoints[i][1]
+		req.start.z = waypoints[i][2]
+		req.end.x = waypoints[i+1][0]
+		req.end.y = waypoints[i+1][1]
+		req.end.z = waypoints[i+1][2]
+
+		# Add the intermediate waypoint
+		intermediate = geometry_msgs.Pose()
+		intermediate.position.x = waypoints[i + 1][0]
+		intermediate.position.y = waypoints[i + 1][1]
+		intermediate.position.z = waypoints[i + 1][2]
+		req.waypoints = [intermediate]
+
+		res = srvc_bc(req)
+
+		# sparse_path will optimise (to reduce flight time and save battery)
+		if len(res.path_sparse.poses) > 0:  # Check if sparse path is available
+			rospy.loginfo("Sparse path found between waypoints %d, %d, and %d", i, i + 1, i + 2)
+			for pose in res.path_sparse.poses:
+				wps.append([pose.position.x, pose.position.y, pose.position.z, 0])
+		elif len(res.path.poses) > 0:  # Fallback to full path if sparse is not available
+			rospy.loginfo("Full path found between waypoints %d, %d, and %d", i, i + 1, i + 2)
+			for pose in res.path.poses:
+				wps.append([pose.position.x, pose.position.y, pose.position.z, 0])
+		else:
+			rospy.logerr("No valid path found for waypoints %d, %d, and %d", i, i + 1, i + 2)
+	# return appended wps variable (as new waypoint list)
+	return wps
+
+
 def main(args):
 	# Initialise ROS
 	rospy.init_node('guidance')
 
 	# List of waypoints
 	# [X, Y, Z, Yaw]
-	wps = generate_waypoints(width=8, height=5, spacing=1, edge_offset=1)
+	#wps_generated = generate_waypoints(width=8,height=5,spacing=1,edge_offset=1) # old code
 
+	################################# NEW CODE
+	# Generate waypoint list using generate_waypoints(...); returns wps_generated
+	waypoints = generate_waypoints(width=8, height=5, spacing=1, edge_offset=1)
+
+	# send wps_generated into path_planning() returns wps_pathplanned "path_planning(wps_generated)"; 
+	wps = path_planning(waypoints) # make sure to run roslaunch ~/catkin_ws/breadcrumb.launch
+
+	# send wps_pathplanned into Guidance "Guidance(wps_path_planned)"
 	guide = Guidance(wps)
+	################################# NEW CODE
+
+	#guide = Guidance(wps_generated) # old code
 
 	# Spin!
 	rospy.spin()
