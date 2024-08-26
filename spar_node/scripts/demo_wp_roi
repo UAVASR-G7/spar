@@ -284,7 +284,7 @@ def generate_waypoints(width, height, spacing, edge_offset):
 def path_planning(waypoints):
 
 	# Setup ROS
-	rospy.init_node('path_planner', anonymous=True)
+	#rospy.init_node('path_planner', anonymous=True)
 
 	rospy.wait_for_service('/breadcrumb/request_path')
 	srvc_bc = rospy.ServiceProxy('/breadcrumb/request_path',RequestPath)
@@ -292,7 +292,7 @@ def path_planning(waypoints):
 	wps = [] # initialise wps list
 
 	# Loop through the list of waypoints
-	for i in range(0,len(waypoints)-2,2):
+	for i in range(len(waypoints)-1):
 		# Set up a path request for breadcrumb
 		# obstacles are assumed to be generated such that they'll interefere with waypoints, hence
 		# breadcrumb will not find a path if the end position is within an obstacle, however, if the
@@ -311,11 +311,15 @@ def path_planning(waypoints):
 		req.end.z = waypoints[i+1][2]
 
 		# Add the intermediate waypoint
-		intermediate = geometry_msgs.Pose()
-		intermediate.position.x = waypoints[i + 1][0]
-		intermediate.position.y = waypoints[i + 1][1]
-		intermediate.position.z = waypoints[i + 1][2]
-		req.waypoints = [intermediate]
+		intermediate = Pose
+		print(Pose.position)
+		#print(type(Pose))
+		#print(intermediate)
+		#print(type(intermediate))
+		#intermediate.position.x = waypoints[i + 1][0]
+		#intermediate.position.y = waypoints[i + 1][1]
+		#intermediate.position.z = waypoints[i + 1][2]
+		#req.waypoints = [intermediate]
 
 		res = srvc_bc(req)
 
