@@ -8,7 +8,7 @@ import time
 import rospy
 import actionlib
 from actionlib_msgs.msg import GoalStatus
-from geometry_msgs.msg import Point, PoseStamped, Pose
+from geometry_msgs.msg import Point, PoseStamped
 from spar_msgs.msg import FlightMotionAction, FlightMotionGoal
 from breadcrumb.srv import RequestPath, RequestPathRequest
 
@@ -298,8 +298,9 @@ def path_planning(waypoints):
 	# Loop through the list of waypoints
 	for i in range(len(waypoints)-1):
 		# Set up a path request for breadcrumb
-		# breadcrumb provides a sub-path generated waypoints list such that sub-waypoints are generated between the two primary waypoints
-		# send to the path planning service. 
+		# breadcrumb provides a sub-path generated waypoints list such that sub-waypoints are generated between the primary waypoints, 
+		# 2 primary waypoints (req.start & req.end) are sent individually, iterating through the entire waypoint list, and sub-waypoints
+		# are outputted as wps. 
 		# 1) try sending 3 wps to breadcrumb at once
 		req = RequestPathRequest()
 
