@@ -252,7 +252,7 @@ class Guidance():
 
 def generate_waypoints(width, height, spacing, edge_offset):
     # Set altitude & YAW
-	alt = 1.3
+	alt = 2.5
 	yaw = 0.0
 
 	waypoints = []
@@ -342,7 +342,7 @@ def main(args):
 
 	################################# NEW CODE
 	# Generate waypoint list using generate_waypoints(...); returns wps_generated
-	waypoints = generate_waypoints(width=8, height=5, spacing=1, edge_offset=1)
+	waypoints = generate_waypoints(width=8, height=5, spacing=1.5, edge_offset=1)
 
 	# send wps_generated into path_planning() returns wps_pathplanned "path_planning(wps_generated)"; 
 	wps = path_planning(waypoints) # make sure to run roslaunch ~/catkin_ws/breadcrumb.launch
