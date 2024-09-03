@@ -20,14 +20,37 @@ spacing = 1.5
 x_points = np.arange(-width/2 + edge_offset, width/2 - edge_offset + spacing/2, spacing)
 y_points = np.arange(-height/2 + edge_offset, height/2 - edge_offset + spacing/2, spacing)
 
-# Traverse the area in a straight line along the y-axis (long axis)
-for y in y_points:
-    for x in x_points:
+# Traverse the area in a straight line along the x-axis (long axis)
+for x in x_points:
+    for y in y_points:
         waypoints.append([x, y, alt, yaw])  # Initialize with z=0.0 and yaw=0.0
-    x_points = x_points[::-1]  # Reverse x_points to keep a straight line in y direction
+    y_points = y_points[::-1]  # Reverse y_points to keep a straight line in x direction
 
 # Add pre-landing waypoint (origin of map)
 waypoints.append([0, 0, alt, 0])
+
+# Remove the middle waypoint if three consecutive waypoints are aligned
+def remove_middle_if_aligned(waypoints):
+    new_waypoints = []
+    i = 0
+    while i < len(waypoints):
+        if i > 0 and i < len(waypoints) - 1:
+            prev_wp = waypoints[i - 1]
+            curr_wp = waypoints[i]
+            next_wp = waypoints[i + 1]
+            
+            # Check if the current waypoint is in a row (aligned on either axis)
+            if (prev_wp[0] == curr_wp[0] == next_wp[0]) or (prev_wp[1] == curr_wp[1] == next_wp[1]):
+                # Skip the current waypoint (remove it)
+                i += 1
+                continue
+
+        new_waypoints.append(waypoints[i])
+        i += 1
+    return new_waypoints
+
+# Apply the function to remove middle waypoints
+waypoints = remove_middle_if_aligned(waypoints)
 
 #print(f"Waypoint List Generated: {waypoints}")
 print(f"x positions: {x_points}")
@@ -81,4 +104,4 @@ for wp in waypoints:
 
 if within_bounds:
     print("All waypoints are within bounds.")
-    plot_waypoints(waypoints,width,height,alt)
+    plot_waypoints(waypoints, width, height, alt)
