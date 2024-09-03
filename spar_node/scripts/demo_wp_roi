@@ -250,32 +250,66 @@ class Guidance():
 				rospy.loginfo("Mission cancelled!")
 				rospy.signal_shutdown("cancelled")
 
-def generate_waypoints(width, height, spacing, edge_offset, alt):
-	# Set YAW & initialuise waypoints
+def generate_waypoints(width,height,x_edge_offset,y_edge_offset,alt):
+
+	# Set altitude & YAW
 	yaw = 0.0
 	waypoints = []
 	
 	# Add takeoff waypoint (over origin of map)
 	waypoints.append([0, 0, alt, 0])
 
-	# NOTE: in demo y is lateral, x is forward (facing demo area)
+	# Given width and height (cannot change these)
 	width = 8
 	height = 5
-	edge_offset = 1
-	spacing = 1.5
+
+	# Define edge offsets
+	x_edge_offset = 0.5
+	y_edge_offset = 0.5
+
+	# Calculate spacings based on the defined edge offsets
+	available_x_space = width - 2 * x_edge_offset
+	available_y_space = height - 2 * y_edge_offset
+
+	# Calculate spacing to ensure symmetry
+	x_spacing = available_x_space / (int(available_x_space) // 2)
+	y_spacing = available_y_space / (int(available_y_space) // 2)
 
 	# Adjust the grid to have the origin in the center and stay within bounds
-	x_points = np.arange(-width/2 + edge_offset, width/2 - edge_offset + spacing/2, spacing)
-	y_points = np.arange(-height/2 + edge_offset, height/2 - edge_offset + spacing/2, spacing)
+	x_points = np.arange(-width/2 + x_edge_offset, width/2 - x_edge_offset + x_spacing, x_spacing)
+	y_points = np.arange(-height/2 + y_edge_offset, height/2 - y_edge_offset + y_spacing, y_spacing)
 
-	# Traverse the area in a straight line along the y-axis (long axis)
-	for y in y_points:
-		for x in x_points:
+	# Traverse the area in a straight line along the x-axis (long axis)
+	for x in x_points:
+		for y in y_points:
 			waypoints.append([x, y, alt, yaw])  # Initialize with z=0.0 and yaw=0.0
-		x_points = x_points[::-1]  # Reverse x_points to keep a straight line in y direction
+		y_points = y_points[::-1]  # Reverse y_points to keep a straight line in x direction
 
 	# Add pre-landing waypoint (origin of map)
 	waypoints.append([0, 0, alt, 0])
+
+	# Remove the middle waypoint if three consecutive waypoints are aligned
+	def remove_middle_if_aligned(waypoints):
+		new_waypoints = []
+		i = 0
+		while i < len(waypoints):
+			if i > 0 and i < len(waypoints) - 1:
+				prev_wp = waypoints[i - 1]
+				curr_wp = waypoints[i]
+				next_wp = waypoints[i + 1]
+				
+				# Check if the current waypoint is in a row (aligned on either axis)
+				if (prev_wp[0] == curr_wp[0] == next_wp[0]) or (prev_wp[1] == curr_wp[1] == next_wp[1]):
+					# Skip the current waypoint (remove it)
+					i += 1
+					continue
+
+			new_waypoints.append(waypoints[i])
+			i += 1
+		return new_waypoints
+
+	# Apply the function to remove middle waypoints
+	# waypoints = remove_middle_if_aligned(waypoints)
 
 	#print(f"Waypoint List Generated: {waypoints}")
 	print(f"x positions: {x_points}")
@@ -287,7 +321,7 @@ def generate_waypoints(width, height, spacing, edge_offset, alt):
 	within_bounds = True
 	for wp in waypoints:
 		x, y, z, _ = wp # "_" ignores YAW
-		if not (-2.5 <= y <= 2.5 and -4 <= x <= 4 and z < 3.5):
+		if not (-height/2 <= y <= height/2 and -width/2 <= x <= width/2 and z <= alt):
 			within_bounds = False
 			print(f"Waypoint {wp} is out of bounds!, all waypoints nulled")
 			waypoints = 0
@@ -295,9 +329,8 @@ def generate_waypoints(width, height, spacing, edge_offset, alt):
 
 	if within_bounds:
 		print("All waypoints are within bounds.")
-		# plot_waypoints(waypoints,width,height,alt)
-		
-		return waypoints
+
+	return waypoints
 
 # This parses the waypoints using the breadcrumb node 
 def path_planning(waypoints):
@@ -357,7 +390,7 @@ def main(args):
 
 	################################# NEW CODE
 	# Generate waypoint list using generate_waypoints(...); returns wps_generated
-	waypoints = generate_waypoints(width=8, height=5, spacing=1.5, edge_offset=1)
+	waypoints = generate_waypoints(width=8,height=5,x_edge_offset=0.5,y_edge_offset=0.5,alt=2)
 
 	# send wps_generated into path_planning() returns wps_pathplanned "path_planning(wps_generated)"; 
 	wps = path_planning(waypoints) # make sure to run roslaunch ~/catkin_ws/breadcrumb.launch
