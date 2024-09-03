@@ -10,15 +10,25 @@ waypoints = []
 # Add takeoff waypoint (over origin of map)
 waypoints.append([0, 0, alt, 0])
 
-# NOTE: in demo y is lateral, x is forward (facing demo area)
+# Given width and height (cannot change these)
 width = 8
 height = 5
-edge_offset = 1
-spacing = 1.5
+
+# Define edge offsets
+x_edge_offset = 0.5
+y_edge_offset = 0.5
+
+# Calculate spacings based on the defined edge offsets
+available_x_space = width - 2 * x_edge_offset
+available_y_space = height - 2 * y_edge_offset
+
+# Calculate spacing to ensure symmetry
+x_spacing = available_x_space / (int(available_x_space) // 2)
+y_spacing = available_y_space / (int(available_y_space) // 2)
 
 # Adjust the grid to have the origin in the center and stay within bounds
-x_points = np.arange(-width/2 + edge_offset, width/2 - edge_offset + spacing/2, spacing)
-y_points = np.arange(-height/2 + edge_offset, height/2 - edge_offset + spacing/2, spacing)
+x_points = np.arange(-width/2 + x_edge_offset, width/2 - x_edge_offset + x_spacing, x_spacing)
+y_points = np.arange(-height/2 + y_edge_offset, height/2 - y_edge_offset + y_spacing, y_spacing)
 
 # Traverse the area in a straight line along the x-axis (long axis)
 for x in x_points:
@@ -50,7 +60,7 @@ def remove_middle_if_aligned(waypoints):
     return new_waypoints
 
 # Apply the function to remove middle waypoints
-waypoints = remove_middle_if_aligned(waypoints)
+#waypoints = remove_middle_if_aligned(waypoints)
 
 #print(f"Waypoint List Generated: {waypoints}")
 print(f"x positions: {x_points}")
@@ -96,7 +106,7 @@ def plot_waypoints(waypoints, width, height, alt):
 within_bounds = True
 for wp in waypoints:
     x, y, z, _ = wp # "_" ignores YAW
-    if not (-2.5 <= y <= 2.5 and -4 <= x <= 4 and z < 3.5):
+    if not (-height/2 <= y <= height/2 and -width/2 <= x <= width/2 and z <= alt):
         within_bounds = False
         print(f"Waypoint {wp} is out of bounds!, all waypoints nulled")
         waypoints = 0
