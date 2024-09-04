@@ -134,6 +134,7 @@ class Guidance():
 
 	# This function will check receive the current pose of the UAV constantly
 	def callback_pose(self, msg_in):
+		rospy.loginfo("Pose Callback recieved/Triggered")
 		# Store the current position at all times so it can be accessed later
 		self.current_location = msg_in.pose.position
 
@@ -141,6 +142,7 @@ class Guidance():
 	# This function will fire whenever a ROI pose message is sent
 	# It is also responsible for handling the ROI "inspection task"
 	def callback_inspect_roi(self, msg_in):
+		rospy.loginfo("ROI Callback recieved/Triggered")
 		# Set our flag that we are performing the diversion
 		self.performing_roi = True
 
