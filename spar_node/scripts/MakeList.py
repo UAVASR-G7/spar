@@ -16,15 +16,18 @@ height = 5
 
 # Define edge offsets
 x_edge_offset = 0.5
-y_edge_offset = 0.5
+y_edge_offset = 0.25
+
+# Density paramater
+dn = 1.5
 
 # Calculate spacings based on the defined edge offsets
-available_x_space = width - 2 * x_edge_offset
-available_y_space = height - 2 * y_edge_offset
+available_x_space = width - dn * x_edge_offset
+available_y_space = height - dn * y_edge_offset
 
 # Calculate spacing to ensure symmetry
-x_spacing = available_x_space / (int(available_x_space) // 2)
-y_spacing = available_y_space / (int(available_y_space) // 2)
+x_spacing = available_x_space / (int(available_x_space) // dn)
+y_spacing = available_y_space / (int(available_y_space) // dn)
 
 # Adjust the grid to have the origin in the center and stay within bounds
 x_points = np.arange(-width/2 + x_edge_offset, width/2 - x_edge_offset + x_spacing, x_spacing)
