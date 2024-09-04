@@ -9,6 +9,7 @@ import rospy
 import actionlib
 from actionlib_msgs.msg import GoalStatus
 from geometry_msgs.msg import Point, PoseStamped
+from nav_msgs.msg import Path
 from spar_msgs.msg import FlightMotionAction, FlightMotionGoal
 from breadcrumb.srv import RequestPath, RequestPathRequest
 
@@ -39,10 +40,10 @@ class Guidance():
 		# Make some space to record down our current location
 		self.current_location = Point()
 		# Set our linear and rotational velocities for the flight
-		self.vel_linear = rospy.get_param("~vel_linear", 0.2)
+		self.vel_linear = rospy.get_param("~vel_linear", 0.85) # edit speed here
 		self.vel_yaw = rospy.get_param("~vel_yaw", 0.2)
 		# Set our position and yaw waypoint accuracies
-		self.accuracy_pos = rospy.get_param("~acc_pos", 0.1)
+		self.accuracy_pos = rospy.get_param("~acc_pos", 0.1) # edit acc_pos here 
 		self.accuracy_yaw = rospy.get_param("~acc_yaw", 0.1)
 
 		# Create our action client
@@ -53,7 +54,7 @@ class Guidance():
 
 		if not rospy.is_shutdown():
 			# Good to go, start mission
-			rospy.loginfo("Starting waypoint mission")
+			rospy.loginfo("Starting waypoint mission / Starting Callbacks")
 
 			# Setup first waypoint segment
 			# XXX:	Another option would be to do "takeoff" and leave "waypoint_counter = 0" to
@@ -67,8 +68,10 @@ class Guidance():
 			# from a diversion to the correct location
 			# XXX: These topics could be hard-coded to avoid using a launch file
 			self.sub_pose = rospy.Subscriber("~pose", PoseStamped, self.callback_pose)
+			## **within PoseStamped function, self.callback_pose will be called**
 			# Subscriber to catch "ROI" diversion commands
 			self.sub_roi = rospy.Subscriber("~roi", PoseStamped, self.callback_inspect_roi)
+			## **when a ~roi message is published callack_inspect_roi func is triggered**
 
 			# XXX: Could have a publisher to output our waypoint progress
 			# throughout the flight (should publish each time the waypoint
@@ -78,6 +81,7 @@ class Guidance():
 
 			# If shutdown is issued (eg. CTRL+C), cancel current
 	 		# mission before rospy is shutdown.
+			# rospy.loginfo("running callbacks if not shutting down")
 			rospy.on_shutdown( lambda : self.shutdown() )
 
 	# This function will check if a list of waypoints is in the format we expect
@@ -185,7 +189,6 @@ class Guidance():
 		# to allow the waypoint timer to take back over
 		self.performing_roi = False
 
-
 	# This function is for convinience to simply send out a new waypoint
 	def send_wp(self, wp):
 		# Make sure the waypoint is valid before continuing
@@ -251,33 +254,23 @@ class Guidance():
 				rospy.signal_shutdown("cancelled")
 
 def generate_waypoints(width,height,x_edge_offset,y_edge_offset,alt):
-
 	# Set altitude & YAW
 	yaw = 0.0
 	waypoints = []
-	
 	# Add takeoff waypoint (over origin of map)
 	waypoints.append([0, 0, alt, 0])
-
 	# Given width and height (cannot change these)
 	width = 8
 	height = 5
-
-	# Define edge offsets
-	x_edge_offset = 0.5
-	y_edge_offset = 0.25
-
 	# Density paramater
 	dn = 1.5
 
 	# Calculate spacings based on the defined edge offsets
 	available_x_space = width - dn * x_edge_offset
 	available_y_space = height - dn * y_edge_offset
-
 	# Calculate spacing to ensure symmetry
 	x_spacing = available_x_space / (int(available_x_space) // dn)
 	y_spacing = available_y_space / (int(available_y_space) // dn)
-
 	# Adjust the grid to have the origin in the center and stay within bounds
 	x_points = np.arange(-width/2 + x_edge_offset, width/2 - x_edge_offset + x_spacing, x_spacing)
 	y_points = np.arange(-height/2 + y_edge_offset, height/2 - y_edge_offset + y_spacing, y_spacing)
@@ -318,7 +311,6 @@ def generate_waypoints(width,height,x_edge_offset,y_edge_offset,alt):
 	print(f"x positions: {x_points}")
 	print(f"y positions: {y_points}")
 	print(f"altitude: {alt}")
-	#print(f" waypoints: {waypoints}")
 
 	# Check all generated waypoints are within bounds (height, width & alt)
 	within_bounds = True
@@ -335,9 +327,32 @@ def generate_waypoints(width,height,x_edge_offset,y_edge_offset,alt):
 
 	return waypoints
 
+def display_path(wps):
+		rospy.loginfo("Displaying Path (from breadcrumb)")
+		# Ensure the publisher is initialized
+		pub_path = rospy.Publisher("/guidance/path", Path, queue_size=10, latch=True)
+		# Create the Path message
+		msg = Path()
+		msg.header.frame_id = "/map"
+		msg.header.stamp = rospy.Time.now()
+		for wp in wps:
+			pose = PoseStamped()
+			pose.pose.position.x = wp[0]  # Access x from i
+			pose.pose.position.y = wp[1]  # Access y from i
+			pose.pose.position.z = wp[2]  # Access z from i
+			# Set default orientation
+			pose.pose.orientation.w = 1.0
+			pose.pose.orientation.x = 0.0
+			pose.pose.orientation.y = 0.0
+			pose.pose.orientation.z = 0.0
+			# Append the pose to the path
+			msg.poses.append(pose)
+		# Publish the path message
+		pub_path.publish(msg)
+
+
 # This parses the waypoints using the breadcrumb node 
 def path_planning(waypoints):
-
 	# Setup ROS
 	#rospy.init_node('path_planner', anonymous=True)
 
@@ -381,28 +396,21 @@ def path_planning(waypoints):
 	print(f"breadcrumb waypoints: {len(wps)}")
 	print(f"generated waypoints: {len(waypoints)}")
 
+	display_path(wps) # publishes total determined path to rviz
 	return wps
 
 def main(args):
 	# Initialise ROS
 	rospy.init_node('guidance')
 
-	# List of waypoints
-	# [X, Y, Z, Yaw]
-	#wps_generated = generate_waypoints(width=8,height=5,spacing=1,edge_offset=1) # old code
-
-	################################# NEW CODE
 	# Generate waypoint list using generate_waypoints(...); returns wps_generated
-	waypoints = generate_waypoints(width=8,height=5,x_edge_offset=0.5,y_edge_offset=0.5,alt=2)
-
+	waypoints = generate_waypoints(width=8,height=5,x_edge_offset=0.5,y_edge_offset=0.25,alt=2)
+	
 	# send wps_generated into path_planning() returns wps_pathplanned "path_planning(wps_generated)"; 
 	wps = path_planning(waypoints) # make sure to run roslaunch ~/catkin_ws/breadcrumb.launch
 
 	# send wps_pathplanned into Guidance "Guidance(wps_path_planned)"
 	guide = Guidance(wps)
-	################################# NEW CODE
-
-	#guide = Guidance(wps_generated) # old code
 
 	# Spin!
 	rospy.spin()
