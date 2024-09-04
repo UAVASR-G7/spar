@@ -14,6 +14,6 @@
 
 		<!-- Remappings -->
 		<remap from="~/pose" to="uavasr/pose" />
-		<!--remap from="~/roi" to="target_detection/roi" /-->
+		<remap from="~/roi" to="target_detection/roi" />
 	</node>
 </launch>
