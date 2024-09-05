@@ -43,7 +43,7 @@ class Guidance():
 		self.vel_linear = rospy.get_param("~vel_linear", 0.85) # edit speed here
 		self.vel_yaw = rospy.get_param("~vel_yaw", 0.2)
 		# Set our position and yaw waypoint accuracies
-		self.accuracy_pos = rospy.get_param("~acc_pos", 0.1) # edit acc_pos here 
+		self.accuracy_pos = rospy.get_param("~acc_pos", 0.2) # edit acc_pos here 
 		self.accuracy_yaw = rospy.get_param("~acc_yaw", 0.1)
 
 		# Create our action client
@@ -67,10 +67,10 @@ class Guidance():
 			# Callback to save "current location" such that we can perform and return
 			# from a diversion to the correct location
 			# XXX: These topics could be hard-coded to avoid using a launch file
-			self.sub_pose = rospy.Subscriber("~pose", PoseStamped, self.callback_pose)
+			self.sub_pose = rospy.Subscriber("/uavasr/pose", PoseStamped, self.callback_pose)
 			## **within PoseStamped function, self.callback_pose will be called**
 			# Subscriber to catch "ROI" diversion commands
-			self.sub_roi = rospy.Subscriber("~roi", PoseStamped, self.callback_inspect_roi)
+			self.sub_roi = rospy.Subscriber("/target_detection/roi", PoseStamped, self.callback_inspect_roi)
 			## **when a ~roi message is published callack_inspect_roi func is triggered**
 
 			# XXX: Could have a publisher to output our waypoint progress
@@ -134,7 +134,7 @@ class Guidance():
 
 	# This function will check receive the current pose of the UAV constantly
 	def callback_pose(self, msg_in):
-		rospy.loginfo("Pose Callback recieved/Triggered")
+		#rospy.loginfo("Pose Callback recieved/Triggered")
 		# Store the current position at all times so it can be accessed later
 		self.current_location = msg_in.pose.position
 
@@ -155,7 +155,7 @@ class Guidance():
 		#		the pose to maintain that throughout a diversion
 
 		# Set the "diversion waypoint" (at yaw zero)
-		dwp = [msg_in.pose.position.x, msg_in.pose.position.y, msg_in.pose.position.z, 0.0]
+		dwp = [msg_in.pose.position.x, msg_in.pose.position.y, msg_in.pose.position.z + 0.5, 0.0]
 		# Set the "return waypoint" (at yaw zero)
 		rwp = [self.current_location.x, self.current_location.y, self.current_location.z, 0.0]
 
