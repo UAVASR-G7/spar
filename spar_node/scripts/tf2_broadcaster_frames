@@ -11,7 +11,7 @@ from geometry_msgs.msg import PoseStamped, TransformStamped
 tfbr = None
 tfsbr = None
 
-uav_name = "emulated_uav" # might need to change when not using emulator
+uav_name = "emulated_uav" # emulated_uav | uavteam7 ?
 camera_name = "camera"
 
 def send_tf_camera():
