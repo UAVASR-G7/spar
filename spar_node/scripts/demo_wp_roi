@@ -419,7 +419,7 @@ class Guidance():
 				rospy.loginfo("Mission cancelled!")
 				rospy.signal_shutdown("cancelled")
 
-def generate_waypoints(width,height,x_edge_offset,y_edge_offset,alt):
+def generate_waypoints(width,height,alt):
 	# Set altitude & YAW
 	yaw = 0.0
 	waypoints = []
@@ -429,7 +429,10 @@ def generate_waypoints(width,height,x_edge_offset,y_edge_offset,alt):
 	width = 8
 	height = 5
 	# Density paramater
-	dn = 1.5
+	dn = 1.4
+	# edge offsets
+	x_edge_offset=0.5
+	y_edge_offset=0.3
 
 	# Calculate spacings based on the defined edge offsets
 	available_x_space = width - dn * x_edge_offset
@@ -440,6 +443,8 @@ def generate_waypoints(width,height,x_edge_offset,y_edge_offset,alt):
 	# Adjust the grid to have the origin in the center and stay within bounds
 	x_points = np.arange(-width/2 + x_edge_offset, width/2 - x_edge_offset + x_spacing, x_spacing)
 	y_points = np.arange(-height/2 + y_edge_offset, height/2 - y_edge_offset + y_spacing, y_spacing)
+	# Generate y_points from -2.4 to 2.25 (inverted range) "to have narrow side not close to net"
+	#y_points = np.arange(-height/2 + y_edge_offset, height/2 - y_edge_offset + y_spacing, y_spacing)[::-1]
 
 	# Traverse the area in a straight line along the x-axis (long axis)
 	for x in x_points:
@@ -471,7 +476,7 @@ def generate_waypoints(width,height,x_edge_offset,y_edge_offset,alt):
 		return new_waypoints
 
 	# Apply the function to remove middle waypoints
-	# waypoints = remove_middle_if_aligned(waypoints)
+	waypoints = remove_middle_if_aligned(waypoints)
 
 	#print(f"Waypoint List Generated: {waypoints}")
 	print(f"x positions: {x_points}")
@@ -521,7 +526,7 @@ def main(args):
 	rospy.init_node('guidance')
 
 	# Generate waypoint list using generate_waypoints(...); returns wps_generated
-	waypoints = generate_waypoints(width=8,height=5,x_edge_offset=0.5,y_edge_offset=0.25,alt=flight_height)
+	waypoints = generate_waypoints(width=8,height=5,alt=flight_height)
 	
 	# send wps_generated into path_planning() returns wps_pathplanned "path_planning(wps_generated)"; 
 	#wps = path_planning(waypoints) # make sure to run roslaunch ~/catkin_ws/breadcrumb.launch
