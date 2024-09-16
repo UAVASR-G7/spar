@@ -40,7 +40,7 @@ class Guidance():
 
 		# Internal counter to see what waypoint were are up to
 		self.waypoint_counter = 0
-		self.reached_wp_1 = False
+		self.reached_wp_1 = False # roi flag for target 1?
 
 		# Set a flag to indicate that we are doing a specific inspection
 		# and that we are not following our waypoint list
@@ -54,7 +54,7 @@ class Guidance():
 		# Landing initialisation flag (to only run aruco_land once)
 		self.aruco_land_initialised = False
 
-		# finished mission flag (to stop the check_waypoint running after aruco_land())
+		# finished mission flag (to stop check_waypoint() running after aruco_land())
 		self.mission_completed = False
 
 		# initialise bread crumb (wait for service to be published)
@@ -67,9 +67,11 @@ class Guidance():
 
 		# Make some space to record down our current location
 		self.current_location = Point()
+
 		# Set our linear and rotational velocities for the flight
 		self.vel_linear = rospy.get_param("~vel_linear",0.7) # edit speed here
 		self.vel_yaw = rospy.get_param("~vel_yaw", 0.2)
+
 		# Set our position and yaw waypoint accuracies
 		self.accuracy_pos = rospy.get_param("~acc_pos", 0.2) # edit acc_pos here 
 		self.accuracy_yaw = rospy.get_param("~acc_yaw", 0.1)
@@ -108,15 +110,7 @@ class Guidance():
 			# Subscriber for ArUco Marker Detection
 			self.sub_aruco = rospy.Subscriber('/processed_aruco/localisation', ArucoLocalisation, self.callback_aruco_marker)
 
-			# XXX: Could have a publisher to output our waypoint progress
-			# throughout the flight (should publish each time the waypoint
-			# counter is increased). Note: will also need to import "Float32"
-			# from "std_msgs.msg" in the header
-			# self.pub_progress = rospy.Subscriber("~waypoint_progress", Float32, 10)
-
-			# If shutdown is issued (eg. CTRL+C), cancel current
-	 		# mission before rospy is shutdown.
-			# rospy.loginfo("running callbacks if not shutting down")
+			# If shutdown is issued (eg. CTRL+C), cancel current mission before rospy is shutdown.
 			rospy.on_shutdown( lambda : self.shutdown() )
 
 	def callback_aruco_marker(self, msg_in):
@@ -170,7 +164,6 @@ class Guidance():
 		world_location = [world_x, world_y]
 		return world_location
 	
-	# This function is for convinience to simply send out a new waypoint
 	def send_wp(self, wp):
 		# Make sure the waypoint is valid before continuing
 		if not self.check_waypoint(wp):
@@ -190,10 +183,7 @@ class Guidance():
 		goal.position_radius = self.accuracy_pos
 		goal.yaw_range = self.accuracy_yaw
 
-		# For this function, we don't wait in the loop.
-		# Instead we just send the waypoint and check up on it later
-		# This checking is either with the "self.timer" for waypoints
-		# or with direct calls during the ROI diversion
+		# check goal status (need to do this whenever sending actions to UAV)
 		self.spar_client.send_goal(goal)
 		self.spar_client.wait_for_result() # wait for waypoint to be reached
 		result = self.spar_client.get_state() # check waypoints are acutally reached
@@ -208,8 +198,8 @@ class Guidance():
 	def aruco_land(self):
 		if not self.aruco_land_initialised:
 			
-			# cancel current goal if there is one (goto goal was set)
-			#self.spar_client.cancel_goal()
+			# cancel current goal if there is one
+			self.spar_client.cancel_goal()
 
 			# Set the current UAV location including flight height
 			starting_location = [self.current_location.x, self.current_location.y, flight_height, 0]
@@ -258,7 +248,6 @@ class Guidance():
 		# Handle shutdown by cancelling the current mission
 		rospy.on_shutdown(lambda: self.spar_client.cancel_goal())
 
-	
 	def path_plan(self, waypoints):
 
 		wps = [] # initialise wps list
@@ -269,7 +258,6 @@ class Guidance():
 			# breadcrumb provides a sub-path generated waypoints list such that sub-waypoints are generated between the primary waypoints, 
 			# 2 primary waypoints (req.start & req.end) are sent individually, iterating through the entire waypoint list, and sub-waypoints
 			# are outputted as wps. 
-			# 1) try sending 3 wps to breadcrumb at once
 			req = RequestPathRequest()
 
 			# Set start and end point
@@ -294,11 +282,12 @@ class Guidance():
 					wps.append([pose.position.x, pose.position.y, pose.position.z, 0])
 			else:
 				rospy.logerr("No valid path found for waypoints %d, %d, and %d", i, i + 1, i + 2)
+
 		# return appended wps variable (as new waypoint list)
 		print(f"breadcrumb waypoints: {len(wps)}")
 		print(f"generated waypoints: {len(waypoints)}")
 
-		display_path(wps) # publishes total determined path to rviz
+		display_path(wps) # publishes total planned path to rviz
 		return wps
 
 	# This function will check if a list of waypoints is in the format we expect
@@ -313,7 +302,7 @@ class Guidance():
 			rospy.logwarn("Waypoints list is empty")
 			return False
 
-		# Check each of our waypoints
+		# Check each of our waypoints are a list ^
 		for i in range(len(wps)):
 			if not self.check_waypoint(wps[i]):
 				rospy.logwarn("Waypoint %i did not pass check" % (i + 1))
@@ -343,7 +332,6 @@ class Guidance():
 		self.sub_pose.unregister()
 		self.sub_roi.unregister()
 		self.spar_client.cancel_goal()
-
 		rospy.loginfo("Guidance stopped")
 
 		
@@ -364,37 +352,24 @@ class Guidance():
 		# Cancel the current goal (if there is one)
 		self.spar_client.cancel_goal()
 
-		# Record our current location so we can return to it later
-		start_location = self.current_location
-
 		# Set the "diversion waypoint" (at yaw zero)
 		dwp = [msg_in.pose.position.x, msg_in.pose.position.y, msg_in.pose.position.z + 0.5, 0.0]
 		#rospy.loginfo("Diversion WP")
 		#rospy.loginfo(msg_in.pose.position.x,msg_in.pose.position.y,msg_in.pose.position.z)
+
 		# Set the "return waypoint" (at yaw zero)
 		rwp = [self.current_location.x, self.current_location.y, self.current_location.z, 0.0]
 		#rospy.loginfo("Return WP")
 		#rospy.loginfo(self.current_location.x,self.current_location.y,self.current_location.z)
 
 		self.send_wp(dwp)
-		self.spar_client.wait_for_result()
-		if self.spar_client.get_state() != GoalStatus.SUCCEEDED:
-			# Something went wrong, cancel out of guidance!
-			rospy.signal_shutdown("cancelled")
-			return
 
 		rospy.loginfo("Reached diversion ROI!")
-		# XXX: Do something?
-		rospy.sleep(rospy.Duration(10))
-
+		rospy.sleep(rospy.Duration(10)) # 10 sec to drop payload
+		# XXX: Do something? drop payload
 		rospy.loginfo("Returning to flight plan...")
 
 		self.send_wp(rwp)
-		self.spar_client.wait_for_result()
-		if self.spar_client.get_state() != GoalStatus.SUCCEEDED:
-			# Something went wrong, cancel out of guidance!
-			rospy.signal_shutdown("cancelled")
-			return
 
 		# "waypoint_counter" represents the "next waypoint"
 		# "waypoint_counter - 1" represents the "current waypoint"
@@ -404,7 +379,6 @@ class Guidance():
 		# to allow the waypoint timer to take back over
 		self.performing_roi = False
 
-
 	# This function will fire whenever we recieve a timer event (te) from rospy.Timer()
 	# The main purpose is to check if a waypoint has been reached,
 	# and if so, send out the next waypoint to continue the mission
@@ -412,12 +386,7 @@ class Guidance():
 		# If we're performing the ROI diversion, then don't do
 		# anything here, as this is handled in that function
 		if not (self.performing_roi or self.mission_completed):
-			# If the last segment has succeeded.
-			# For more complex tasks, it might be necessary to also
-			# check if you are in waypoint or diversion mode here.
-			# Hint: really, we should check for other status states
-			#		(such as aborted), as there are some states
-			#		where we won't recover from, and should just exit
+			# if last send_wp/action succeeded run this if loop 
 			if self.spar_client.get_state() == GoalStatus.SUCCEEDED:
 				rospy.loginfo("Reached waypoint %i!" % (self.waypoint_counter))
 				# XXX:	Another check could go here to finish the mission early
@@ -476,7 +445,7 @@ def generate_waypoints(width,height,x_edge_offset,y_edge_offset,alt):
 		y_points = y_points[::-1]  # Reverse y_points to keep a straight line in x direction
 
 	# Add pre-landing waypoint (origin of map)
-	waypoints.append([0, 0, alt, 0])
+	#waypoints.append([0, 0, alt, 0])
 
 	# Remove the middle waypoint if three consecutive waypoints are aligned
 	def remove_middle_if_aligned(waypoints):
