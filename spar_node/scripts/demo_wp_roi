@@ -12,6 +12,7 @@ from geometry_msgs.msg import Point, PoseStamped
 from nav_msgs.msg import Path
 from spar_msgs.msg import FlightMotionAction, FlightMotionGoal, ArucoLocalisation
 from breadcrumb.srv import RequestPath, RequestPathRequest
+from sensor_msgs.msg import BatteryState
 from std_msgs.msg import Bool
 from std_msgs.msg import Int32
 
@@ -28,7 +29,7 @@ class Guidance():
 	def __init__(self, waypoints):
 		# Make sure we have a valid waypoint list
 		if not self.check_waypoints(waypoints):
-			raise ArgumentError("Invalid waypoint list input!")
+			print("Invalid waypoint list input!, reccommend abort")
 
 		## Variables necessary for the mission
 		self.aruco_found = False
@@ -94,14 +95,12 @@ class Guidance():
 
 			# Setup a timer to check if our waypoint has completed at 20Hz
 			self.timer = rospy.Timer(rospy.Duration(1.0/20.0), self.check_waypoint_status)
-			# Callback to save "current location" such that we can perform and return
-			# from a diversion to the correct location
-			# XXX: These topics could be hard-coded to avoid using a launch file
+			# Callback to save "current location" such that we can perform and return from a diversion to the correct location
 			self.sub_pose = rospy.Subscriber("~pose", PoseStamped, self.callback_pose)
-			## **within PoseStamped function, self.callback_pose will be called**
 			# Subscriber to catch "ROI" diversion commands
 			self.sub_roi = rospy.Subscriber("~roi", PoseStamped, self.callback_inspect_roi)
-			## **when a ~roi message is published callack_inspect_roi func is triggered**
+			# Safe landing subscriber (for low battery status)
+			#self.sub_battery = rospy.Subscriber('/mavros/battery',BatteryState,self.callback_battery)
 			
 			# GCS LAND VOCAL
 			self.pub_land_vocal = rospy.Publisher('vocal/land', Bool, queue_size = 10)
@@ -111,7 +110,31 @@ class Guidance():
 			self.sub_aruco = rospy.Subscriber('/processed_aruco/localisation', ArucoLocalisation, self.callback_aruco_marker)
 
 			# If shutdown is issued (eg. CTRL+C), cancel current mission before rospy is shutdown.
-			rospy.on_shutdown( lambda : self.shutdown() )
+			rospy.on_shutdown(lambda : self.shutdown())
+
+	#def callback_battery(self,msg_in): # callback for battery percentage tracking
+	#	self.battery_per = msg_in.percentage
+
+	def low_battery_landing(self,timer=None):
+		if self.battery_per <= 10:
+			print(f"Battery Percentage Critical: {self.battery_per}")
+			print("Aborting Mission, Landing at current position")
+			self.spar_client.cancel_goal()
+			goal = FlightMotionGoal()
+			goal.motion = FlightMotionGoal.MOTION_LAND
+			goal.velocity_vertical = rospy.get_param("~speed", 0.2)
+			# Send the land signal/goals
+			rospy.loginfo("Sending landing signal...")
+			self.spar_client.send_goal(goal)
+			self.spar_client.wait_for_result()
+			# Output feedback on the landing result
+			result = self.spar_client.get_state()
+			if result == GoalStatus.SUCCEEDED:
+				rospy.loginfo("Landing complete!")
+				self.mission_completed = True
+				self.spar_client.cancel_goal() # cance goal to finish mission
+			else:
+				rospy.logerr("Landing failed!")
 
 	def callback_aruco_marker(self, msg_in):
 		# Only run ArUco detection if the UAV is at the desired flight height (Reached the first waypoint, and not performing ROI tasks)
@@ -139,6 +162,46 @@ class Guidance():
 					## Change if aruco location is outputted correctly above
 					self.landing_wp = [aruco_location[0], aruco_location[1], flight_height, pi]
 					self.aruco_found = True
+
+	# This function will check receive the current pose of the UAV constantly
+	def callback_pose(self, msg_in):
+		#rospy.loginfo("Pose Callback recieved/Triggered")
+		# Store the current position at all times so it can be accessed later
+		self.current_location = msg_in.pose.position
+
+	# This function will fire whenever a ROI pose message is sent
+	# It is also responsible for handling the ROI "inspection task"
+	def callback_inspect_roi(self, msg_in):
+		rospy.loginfo("ROI Callback recieved/Triggered")
+		# Set our flag that we are performing the diversion
+		self.performing_roi = True
+		rospy.loginfo("Starting diversion to ROI...")
+		# Cancel the current goal (if there is one)
+		self.spar_client.cancel_goal()
+
+		# Set the "diversion waypoint" (at yaw zero)
+		dwp = [msg_in.pose.position.x, msg_in.pose.position.y, msg_in.pose.position.z + 0.5, 0.0]
+		#rospy.loginfo("Diversion WP")
+		#rospy.loginfo(msg_in.pose.position.x,msg_in.pose.position.y,msg_in.pose.position.z)
+		# Set the "return waypoint" (at yaw zero)
+		rwp = [self.current_location.x, self.current_location.y, self.current_location.z, 0.0]
+		#rospy.loginfo("Return WP")
+		#rospy.loginfo(self.current_location.x,self.current_location.y,self.current_location.z)
+
+		self.send_wp(dwp)
+		rospy.loginfo("Reached diversion ROI!")
+		rospy.sleep(rospy.Duration(10)) # 10 sec to drop payload
+		# XXX: Do something? drop payload
+		rospy.loginfo("Returning to flight plan...")
+		self.send_wp(rwp)
+
+		# "waypoint_counter" represents the "next waypoint"
+		# "waypoint_counter - 1" represents the "current waypoint"
+		rospy.loginfo("Resuming flight plan from waypoint %i!" % (self.waypoint_counter - 1))
+		self.send_wp(self.waypoints[self.waypoint_counter - 1])
+		# Unset our flag that we are performing a diversion
+		# to allow the waypoint timer to take back over
+		self.performing_roi = False
 
 	# This function is used to translate between the camera frame and the world location when undertaking aruco detection
 	def aruco_frame_translation(self, camera_location):
@@ -197,13 +260,10 @@ class Guidance():
 	
 	def aruco_land(self):
 		if not self.aruco_land_initialised:
-			
 			# cancel current goal if there is one
 			self.spar_client.cancel_goal()
-
 			# Set the current UAV location including flight height
 			starting_location = [self.current_location.x, self.current_location.y, flight_height, 0]
-			
 			# Check if an ArUco marker is detected to determine landing location
 			if self.FoundAruco:  # Land at ArUco marker's coordinates
 				rospy.loginfo("ArUco marker found. Landing at marker location.")
@@ -214,19 +274,15 @@ class Guidance():
 			
 			# Plan the path from current location to the landing location (@ current altitude)
 			self.landing_path = self.path_plan([starting_location, landing_location])
-
 			# Send the UAV to the landing waypoints (@ current altitude)
 			for landing_path in self.landing_path:
 				self.send_wp(landing_path)
-
 			# cancel previous goal set by send_wp()
 			self.spar_client.cancel_goal()
-
 			# Create the goal object for landing
 			goal = FlightMotionGoal()
 			goal.motion = FlightMotionGoal.MOTION_LAND
 			goal.velocity_vertical = 0.25  # Set slow vertical landing velocity
-
 			# Send the land signal/goals
 			rospy.loginfo("Sending landing signal...")
 			self.spar_client.send_goal(goal)
@@ -241,7 +297,6 @@ class Guidance():
 				self.spar_client.cancel_goal() # cance goal to finish mission
 			else:
 				rospy.logerr("Landing failed!")
-
 			# set landing initialisation flag 
 			self.aruco_land_initialised = True
 
@@ -249,9 +304,7 @@ class Guidance():
 		rospy.on_shutdown(lambda: self.spar_client.cancel_goal())
 
 	def path_plan(self, waypoints):
-
 		wps = [] # initialise wps list
-
 		# Loop through the list of waypoints
 		for i in range(len(waypoints)-1):
 			# Set up a path request for breadcrumb
@@ -267,9 +320,7 @@ class Guidance():
 			req.end.x = waypoints[i+1][0]
 			req.end.y = waypoints[i+1][1]
 			req.end.z = waypoints[i+1][2]
-
 			res = self.srvc_bc(req)
-
 			# sparse_path can optimise sub-waypoints generated by breadcrumb in-between the main waypoints
 			# print to screen whether sparse_path or path was used (to observe optimisations)
 			if len(res.path_sparse.poses) > 0:  # Check if sparse path is available
@@ -282,11 +333,9 @@ class Guidance():
 					wps.append([pose.position.x, pose.position.y, pose.position.z, 0])
 			else:
 				rospy.logerr("No valid path found for waypoints %d, %d, and %d", i, i + 1, i + 2)
-
 		# return appended wps variable (as new waypoint list)
 		print(f"breadcrumb waypoints: {len(wps)}")
 		print(f"generated waypoints: {len(waypoints)}")
-
 		display_path(wps) # publishes total planned path to rviz
 		return wps
 
@@ -307,7 +356,6 @@ class Guidance():
 			if not self.check_waypoint(wps[i]):
 				rospy.logwarn("Waypoint %i did not pass check" % (i + 1))
 				return False
-
 		# If we haven't returned false yet, then waypoints look good!
 		return True
 
@@ -333,51 +381,6 @@ class Guidance():
 		self.sub_roi.unregister()
 		self.spar_client.cancel_goal()
 		rospy.loginfo("Guidance stopped")
-
-		
-	# This function will check receive the current pose of the UAV constantly
-	def callback_pose(self, msg_in):
-		#rospy.loginfo("Pose Callback recieved/Triggered")
-		# Store the current position at all times so it can be accessed later
-		self.current_location = msg_in.pose.position
-
-	# This function will fire whenever a ROI pose message is sent
-	# It is also responsible for handling the ROI "inspection task"
-	def callback_inspect_roi(self, msg_in):
-		rospy.loginfo("ROI Callback recieved/Triggered")
-		# Set our flag that we are performing the diversion
-		self.performing_roi = True
-
-		rospy.loginfo("Starting diversion to ROI...")
-		# Cancel the current goal (if there is one)
-		self.spar_client.cancel_goal()
-
-		# Set the "diversion waypoint" (at yaw zero)
-		dwp = [msg_in.pose.position.x, msg_in.pose.position.y, msg_in.pose.position.z + 0.5, 0.0]
-		#rospy.loginfo("Diversion WP")
-		#rospy.loginfo(msg_in.pose.position.x,msg_in.pose.position.y,msg_in.pose.position.z)
-
-		# Set the "return waypoint" (at yaw zero)
-		rwp = [self.current_location.x, self.current_location.y, self.current_location.z, 0.0]
-		#rospy.loginfo("Return WP")
-		#rospy.loginfo(self.current_location.x,self.current_location.y,self.current_location.z)
-
-		self.send_wp(dwp)
-
-		rospy.loginfo("Reached diversion ROI!")
-		rospy.sleep(rospy.Duration(10)) # 10 sec to drop payload
-		# XXX: Do something? drop payload
-		rospy.loginfo("Returning to flight plan...")
-
-		self.send_wp(rwp)
-
-		# "waypoint_counter" represents the "next waypoint"
-		# "waypoint_counter - 1" represents the "current waypoint"
-		rospy.loginfo("Resuming flight plan from waypoint %i!" % (self.waypoint_counter - 1))
-		self.send_wp(self.waypoints[self.waypoint_counter - 1])
-		# Unset our flag that we are performing a diversion
-		# to allow the waypoint timer to take back over
-		self.performing_roi = False
 
 	# This function will fire whenever we recieve a timer event (te) from rospy.Timer()
 	# The main purpose is to check if a waypoint has been reached,
