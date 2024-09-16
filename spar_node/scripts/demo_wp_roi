@@ -195,6 +195,13 @@ class Guidance():
 		# This checking is either with the "self.timer" for waypoints
 		# or with direct calls during the ROI diversion
 		self.spar_client.send_goal(goal)
+		self.spar_client.wait_for_result() # wait for waypoint to be reached
+		result = self.spar_client.get_state() # check waypoints are acutally reached
+		if result == GoalStatus.SUCCEEDED:
+			print(f"send_wp goal succeeded for waypoint: {wp}")
+		else:
+			print(f"send_wp goal failed for waypoint: {wp}")
+			
 		 # If shutdown is issued, cancel current mission before rospy is shutdown
 		rospy.on_shutdown(lambda : self.spar_client.cancel_goal())
 	
@@ -420,14 +427,11 @@ class Guidance():
 				#		 i.e. if complete; elif more wps; else wps finished)
 				# only run this if loop if the spar_client is not waiting for a result
 				if self.waypoint_counter < (len(self.waypoints)):
-
+					# send generated waypoints to path_plan() for breadcrumb implementation
 					path_plan_wps = self.path_plan([self.waypoints[self.waypoint_counter-1],self.waypoints[self.waypoint_counter]])
-
+					# send path planned waypoints to send_wp()
 					for planned_path in path_plan_wps:
 						self.send_wp(planned_path)
-
-					# Send the new waypoint
-					#self.send_wp(self.waypoints[self.waypoint_counter])
 
 					# Increment our waypoint counter
 					self.waypoint_counter += 1
