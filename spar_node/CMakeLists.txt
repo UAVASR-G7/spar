@@ -177,6 +177,7 @@ catkin_install_python(PROGRAMS
   scripts/tf2_broadcaster_target
   scripts/tf2_listener
   scripts/ROSI2.py
+  scripts/battery_state_publisher.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
