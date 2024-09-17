@@ -23,7 +23,7 @@ from std_msgs.msg import Int32
 # i.e. it will have it's own publishers, subscribers, etc., that
 # will call it's own functions as callbacks, etc.
 global flight_height
-flight_height = 1.5
+flight_height = 1.8
 
 class Guidance():
 	def __init__(self, waypoints):
@@ -70,7 +70,7 @@ class Guidance():
 		self.current_location = Point()
 
 		# Set our linear and rotational velocities for the flight
-		self.vel_linear = rospy.get_param("~vel_linear",0.7) # edit speed here
+		self.vel_linear = rospy.get_param("~vel_linear",0.6) # edit speed here
 		self.vel_yaw = rospy.get_param("~vel_yaw", 0.2)
 
 		# Set our position and yaw waypoint accuracies
@@ -100,7 +100,7 @@ class Guidance():
 			# Subscriber to catch "ROI" diversion commands
 			self.sub_roi = rospy.Subscriber("~roi", PoseStamped, self.callback_inspect_roi)
 			# Safe landing subscriber (for low battery status)
-			#self.sub_battery = rospy.Subscriber('/mavros/battery',BatteryState,self.callback_battery)
+			self.sub_battery = rospy.Subscriber('/mavros/battery',BatteryState,self.callback_battery)
 			
 			# GCS LAND VOCAL
 			self.pub_land_vocal = rospy.Publisher('vocal/land', Bool, queue_size = 10)
@@ -112,8 +112,8 @@ class Guidance():
 			# If shutdown is issued (eg. CTRL+C), cancel current mission before rospy is shutdown.
 			rospy.on_shutdown(lambda : self.shutdown())
 
-	#def callback_battery(self,msg_in): # callback for battery percentage tracking
-	#	self.battery_per = msg_in.percentage
+	def callback_battery(self,msg_in): # callback for battery percentage tracking
+		self.battery_per = msg_in.percentage
 
 	def low_battery_landing(self,timer=None):
 		if self.battery_per <= 10:
@@ -141,19 +141,20 @@ class Guidance():
 		if self.reached_wp_1 and not self.performing_roi:
 			if not self.aruco_found:
 				rospy.loginfo('ArUco Found!')
-				self.FoundAruco = True # Set found aruco flag
-				self.pub_aruco_vocal.publish(msg_in.aruco_id)
+				# self.FoundAruco = True # Set found aruco flag
 				# Store the first ArUco marker, regardless of ID
-				if self.aruco_id == -1:
-					aruco_location = self.aruco_frame_translation([msg_in.frame_x, msg_in.frame_y])
-					rospy.loginfo(f'UAV Location at x: {self.current_location.x}, y: {self.current_location.y}')
-					rospy.loginfo(f'ArUco Marker {msg_in.aruco_id} Detected at x: {aruco_location[0]}, y: {aruco_location[1]}')
-					# Update the landing location to the current loation when an ArUco marker is found
-					#self.landing_wp = [self.current_location.x, self.current_location.y, flight_height, pi]
-					## Change if aruco location is outputted correctly above
-					self.landing_wp = [aruco_location[0], aruco_location[1], flight_height, pi]
-					self.aruco_found = True
-				elif msg_in.aruco_id == self.aruco_id:
+				# if self.aruco_id == -1:
+				# 	aruco_location = self.aruco_frame_translation([msg_in.frame_x, msg_in.frame_y])
+				# 	rospy.loginfo(f'UAV Location at x: {self.current_location.x}, y: {self.current_location.y}')
+				# 	rospy.loginfo(f'ArUco Marker {msg_in.aruco_id} Detected at x: {aruco_location[0]}, y: {aruco_location[1]}')
+				# 	# Update the landing location to the current loation when an ArUco marker is found
+				# 	#self.landing_wp = [self.current_location.x, self.current_location.y, flight_height, pi]
+				# 	## Change if aruco location is outputted correctly above
+				# 	self.landing_wp = [aruco_location[0], aruco_location[1], flight_height, pi]
+				# 	self.aruco_found = True
+				if msg_in.aruco_id == self.aruco_id:
+					self.FoundAruco = True
+					self.pub_aruco_vocal.publish(msg_in.aruco_id)
 					aruco_location = self.aruco_frame_translation([msg_in.frame_x, msg_in.frame_y])
 					rospy.loginfo(f'UAV Location at x: {self.current_location.x}, y: {self.current_location.y}')
 					rospy.loginfo(f'ArUco Marker {msg_in.aruco_id} Detected at x: {aruco_location[0]}, y: {aruco_location[1]}')
