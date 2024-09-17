@@ -5,7 +5,7 @@ from sensor_msgs.msg import BatteryState
 
 def publish_battery_state():
     rospy.init_node('battery_state_publisher', anonymous=True)
-    battery_pub = rospy.Publisher('/battery_state', BatteryState, queue_size=10)
+    battery_pub = rospy.Publisher('/mavros/battery', BatteryState, queue_size=10)
 
     rate = rospy.Rate(1)  # 1 Hz
 

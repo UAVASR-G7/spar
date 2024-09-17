@@ -31,6 +31,9 @@ class Guidance():
 		if not self.check_waypoints(waypoints):
 			print("Invalid waypoint list input!, reccommend abort")
 
+		# initialise battery percentage (for testing)
+		self.battery_per = 100
+
 		## Variables necessary for the mission
 		self.aruco_found = False
 		self.aruco_id = 0
@@ -54,6 +57,9 @@ class Guidance():
 
 		# Landing initialisation flag (to only run aruco_land once)
 		self.aruco_land_initialised = False
+
+		# Landing initialisation flag (critical battery)
+		self.crit_bat_land_init = False
 
 		# finished mission flag (to stop check_waypoint() running after aruco_land())
 		self.mission_completed = False
@@ -114,9 +120,12 @@ class Guidance():
 
 	def callback_battery(self,msg_in): # callback for battery percentage tracking
 		self.battery_per = msg_in.percentage
+		Bat = '/mavros/battery'
+		#print(f"callback received topic value is:{Bat}")
 
 	def low_battery_landing(self,timer=None):
-		if self.battery_per <= 10:
+		if self.battery_per <= 10 and not self.crit_bat_land_init:
+			self.crit_bat_land_init = True
 			print(f"Battery Percentage Critical: {self.battery_per}")
 			print("Aborting Mission, Landing at current position")
 			self.spar_client.cancel_goal()
@@ -387,6 +396,7 @@ class Guidance():
 	# The main purpose is to check if a waypoint has been reached,
 	# and if so, send out the next waypoint to continue the mission
 	def check_waypoint_status(self, te):
+		self.low_battery_landing()
 		# If we're performing the ROI diversion, then don't do
 		# anything here, as this is handled in that function
 		if not (self.performing_roi or self.mission_completed):
