@@ -172,7 +172,7 @@ class Guidance():
 	# This function will fire whenever a ROI pose message is sent
 	# It is also responsible for handling the ROI "inspection task"
 	def callback_inspect_roi(self, msg_in):
-		rospy.loginfo("ROI Callback recieved/Triggered")
+		rospy.loginfo("ROI Callback recieved/triggered")
 		# Set our flag that we are performing the diversion
 		self.performing_roi = True
 		rospy.loginfo("Starting diversion to ROI...")
@@ -528,9 +528,6 @@ def main(args):
 	# Generate waypoint list using generate_waypoints(...); returns wps_generated
 	waypoints = generate_waypoints(width=8,height=5,alt=flight_height)
 	
-	# send wps_generated into path_planning() returns wps_pathplanned "path_planning(wps_generated)"; 
-	#wps = path_planning(waypoints) # make sure to run roslaunch ~/catkin_ws/breadcrumb.launch
-
 	# send wps_pathplanned into Guidance "Guidance(wps_path_planned)"
 	guide = Guidance(waypoints)
 
