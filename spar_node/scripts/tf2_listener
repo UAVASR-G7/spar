@@ -1,66 +1,84 @@
 #!/usr/bin/env python
 
+# Import necessary libraries for mathematical operations and ROS functionalities
 import math
+import rospy  # ROS Python client library
+import tf2_ros  # ROS library for handling coordinate transformations (TF2)
+from std_msgs.msg import Time  # Standard ROS message type for timestamps
+from geometry_msgs.msg import TransformStamped, PoseStamped  # ROS message types for transforms and poses
 
-import rospy
-import tf2_ros
-from std_msgs.msg import Time
-from geometry_msgs.msg import TransformStamped, PoseStamped
-
-tfBuffer = None
-tfln = None
-pub_roi = None
+# Global variables
+tfBuffer = None  # Buffer to store and query transformations
+tfln = None  # TransformListener to listen for incoming transforms and populate the buffer
+pub_roi = None  # Publisher to send the Region of Interest (ROI) as a PoseStamped message
 
 def callback_target_found(msg_in):
-	# We recieved a "found" timestamp
-	# attempt to find the transformation
+    """
+    Callback function that is triggered when a "target found" timestamp is received.
+    It looks up the transform between the "map" and "target" frames at the specific time.
+    Then, it sends the target's position as an ROI (Region of Interest) to a specified topic.
+    
+    Args:
+        msg_in (std_msgs/Time): A message containing the timestamp when the target was found.
+    """
     try:
-    # Lookup transform from "map" to "target" at time "msg_in.data",
-    # and allow for 0.5 seconds to collected any additionally needed data
+        # Lookup the transform from "map" to "target" at the time specified in msg_in.data.
+        # We give the system a maximum of 0.5 seconds to collect any additional data if necessary.
         t = tfBuffer.lookup_transform("map", "target", msg_in.data, rospy.Duration(0.5))
 
-        # Dump information to screen
-        # This is the information we want for the ROI (demo_wp_roi)
+        # Log the position of the target in the "map" frame
         rospy.loginfo("Found target at the following location in the world:")
         rospy.loginfo("[x: %0.2f; y: %0.2f; z: %0.2f]" % (t.transform.translation.x,
                                                             t.transform.translation.y,
                                                             t.transform.translation.z))
-        rospy.loginfo("Sending ROI...")
-        pose = PoseStamped()
-        pose.pose.position.x = t.transform.translation.x
-        pose.pose.position.y = t.transform.translation.y
-        pose.pose.position.z = t.transform.translation.z
 
-        pose.pose.orientation.w = 1.0
-        pose.pose.orientation.x = 0.0 
+        # Create a PoseStamped message to represent the ROI
+        # The pose will include the position (from the transform) and a default orientation (no rotation)
+        pose = PoseStamped()
+        pose.pose.position.x = t.transform.translation.x  # X coordinate of the target in the "map" frame
+        pose.pose.position.y = t.transform.translation.y  # Y coordinate of the target in the "map" frame
+        pose.pose.position.z = t.transform.translation.z  # Z coordinate of the target in the "map" frame
+
+        # Set orientation to default (no rotation)
+        pose.pose.orientation.w = 1.0  # No rotation (w=1.0 quaternion represents no rotation)
+        pose.pose.orientation.x = 0.0  # Default zero values for x, y, z (no rotation)
         pose.pose.orientation.y = 0.0
         pose.pose.orientation.z = 0.0
-        pub_roi.publish(pose)
-        rospy.loginfo("Coordinated Sent!")
 
+        # Publish the ROI (Region of Interest) as a PoseStamped message to the topic
+        pub_roi.publish(pose)
+        rospy.loginfo("ROI sent to /target_detection/roi.")
+
+    # Catch and log any exceptions related to the transform lookup (e.g., if the transform is unavailable)
     except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
-        rospy.logwarn(e)
+        rospy.logwarn("Transform lookup failed: %s" % str(e))
 
 if __name__ == '__main__':
+    # Initialize the ROS node with the name 'tf2_listener'
     rospy.init_node('tf2_listener')
 
-    # Setup timestamp subscriber for "target found" at a specific timestamp
+    # Subscribe to the topic that publishes timestamps for "target found" events
+    # When a new message (timestamp) is received, the callback_target_found function is triggered
     sub_found = rospy.Subscriber('/emulated_uav/target_found', Time, callback_target_found)
-    # change to /emulated_uav
+    # Note: To change to another UAV, modify the topic name (e.g., '/uavteam7/target_found')
 
-    # Create a listener
-    # This catches all messages sent using TF2
-    tfBuffer = tf2_ros.Buffer()
-    tfln = tf2_ros.TransformListener(tfBuffer)
+    # Create a TransformListener, which listens for all TF2 messages and populates the tfBuffer with transform data
+    tfBuffer = tf2_ros.Buffer()  # Buffer for storing transformations
+    tfln = tf2_ros.TransformListener(tfBuffer)  # Listener that populates the buffer with transform data
 
-    # publish our ROI to demo_wp_roi to trigger roi callback/inspection
+    # Publisher for sending the ROI (Region of Interest) as a PoseStamped message
+    # The ROI will be published to the /target_detection/roi topic for further processing
     pub_roi = rospy.Publisher('/target_detection/roi', PoseStamped, queue_size=10)
 
-    rospy.loginfo("tf2_listener running.")
+    # Log information that the tf2_listener node is now running
+    rospy.loginfo("tf2_listener node is running...")
 
+    # Keep the node running and listening for messages
     try:
-        rospy.spin()
-    except rospy.exceptions.ROSInterruptException:
+        rospy.spin()  # This will keep the node active until manually stopped
+    except rospy.ROSInterruptException:
+        # If the node is interrupted (e.g., via Ctrl+C), unregister from the subscriber to cleanly shut it down
         sub_found.unregister()
     finally:
-        rospy.loginfo("tf2_listener shutting down")
+        # Log a message when the node is shutting down
+        rospy.loginfo("tf2_listener node is shutting down.")
