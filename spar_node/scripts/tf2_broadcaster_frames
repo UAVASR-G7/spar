@@ -1,79 +1,108 @@
 #!/usr/bin/env python
 
-import math
+# Import required libraries
+import math  # For mathematical functions such as pi
+import rospy  # ROS Python client library
+import tf2_ros  # For ROS transform broadcasting (static and dynamic)
+import tf_conversions  # To handle quaternion and Euler transformations
+from geometry_msgs.msg import PoseStamped, TransformStamped  # ROS message types for pose and transforms
 
-import rospy
-import tf2_ros
-import tf_conversions
-from geometry_msgs.msg import PoseStamped, TransformStamped
+# Global variables for broadcasters
+# These will be used to broadcast static and dynamic transforms
+tfbr = None  # Dynamic transform broadcaster (currently not used)
+tfsbr = None  # Static transform broadcaster
 
-# Global Variables
-tfbr = None
-tfsbr = None
-
-uav_name = "emulated_uav" # emulated_uav | uavteam7 ?
-camera_name = "camera"
+# Frame names for UAV and camera
+uav_name = "emulated_uav"  # Name of the UAV's coordinate frame
+#uav_name = "uavteam7"
+camera_name = "camera"  # Name of the camera's coordinate frame
 
 def send_tf_camera():
-	# Create a static transform that is slightly
-	# below the UAV and pointing downwards
-	t = TransformStamped()
-	t.header.stamp = rospy.Time.now()
-	t.header.frame_id = uav_name
-	t.child_frame_id = camera_name
+    """
+    This function sends a static transform between the UAV and its camera.
+    The camera is positioned slightly below and in front of the UAV, and
+    it is rotated to point downward.
+    """
+    
+    # Create a ROS TransformStamped message to represent the static transform
+    t = TransformStamped()
 
-	t.transform.translation.x = 0.10
-	t.transform.translation.y = 0.0
-	t.transform.translation.z = -0.15
-	q = tf_conversions.transformations.quaternion_from_euler(0, math.pi, 0)
-	t.transform.rotation.x = q[0]
-	t.transform.rotation.y = q[1]
-	t.transform.rotation.z = q[2]
-	t.transform.rotation.w = q[3]
+    # Add timestamp for the current time
+    t.header.stamp = rospy.Time.now()
 
-	# Send the static transformation
-	tfsbr.sendTransform(t)
+    # Set the frame of reference (parent) to the UAV and child frame to the camera
+    t.header.frame_id = uav_name
+    t.child_frame_id = camera_name
 
-"""
-This is step typically done by the same program that outputs the pose
+    # Define the translation (position) of the camera relative to the UAV
+    # Camera is located 10 cm in front of the UAV (x), and 15 cm below (z)
+    t.transform.translation.x = 0.10  # Forward offset of 10 cm
+    t.transform.translation.y = 0.0  # No lateral offset
+    t.transform.translation.z = -0.15  # Downward offset of 15 cm
 
-def callback_pose( msg_in ):
-	# Create a transform at the time
-	# from the pose message for where
-	# the UAV is in the map
-	t = TransformStamped()
-	t.header = msg_in.header
-	t.child_frame_id = uav_name
+    # Define the rotation of the camera relative to the UAV using Euler angles (converted to a quaternion)
+    # The camera is rotated to point downward with a 180-degree (pi radians) rotation around the Y-axis (pitch)
+    q = tf_conversions.transformations.quaternion_from_euler(0, math.pi, 0)  # (roll, pitch, yaw)
+    
+    # Apply the calculated quaternion to the transform message
+    t.transform.rotation.x = q[0]
+    t.transform.rotation.y = q[1]
+    t.transform.rotation.z = q[2]
+    t.transform.rotation.w = q[3]
 
-	t.transform.translation = msg_in.pose.position
-	t.transform.rotation = msg_in.pose.orientation
+    # Broadcast the static transform using the static transform broadcaster (tfsbr)
+    tfsbr.sendTransform(t)
 
-	# Send the transformation
-	tfbr.sendTransform(t)
-"""
+def callback_pose(msg_in):
+    """
+    Callback function to handle incoming pose messages and broadcast
+    a dynamic transform of the UAV's position and orientation.
+    
+    This function is not currently used in the script but can be activated
+    to broadcast real-time UAV poses.
+    """
+    
+    # Create a TransformStamped message for the UAV's pose
+    t = TransformStamped()
+
+    # Use the same header (timestamp and frame info) from the incoming pose message
+    t.header = msg_in.header
+
+    # Set the child frame ID to the UAV's frame
+    t.child_frame_id = uav_name
+
+    # Copy the position and orientation data from the pose message
+    t.transform.translation = msg_in.pose.position
+    t.transform.rotation = msg_in.pose.orientation
+
+    # Broadcast the dynamic transform using the dynamic broadcaster (tfbr)
+    tfbr.sendTransform(t)
 
 if __name__ == '__main__':
-	rospy.init_node('tf2_broadcaster_frames')
+    # Initialize the ROS node called 'tf2_broadcaster_frames'
+    rospy.init_node('tf2_broadcaster_frames')
 
-	# Setup pose subscriber
-	# This functionality is provided by the emulator
-	#rospy.Subscriber('/emulated_uav/pose', PoseStamped, callback_pose)
+    # Uncomment the following line if you want to subscribe to a UAV pose topic
+    # This would allow the node to receive real-time UAV position and orientation data
+    # rospy.Subscriber('/emulated_uav/pose', PoseStamped, callback_pose)
 
-	# Setup tf2 broadcasters
-	#    Broadcaster sends a transformation that
-	#    can be found at specific time
-	#tfbr = tf2_ros.TransformBroadcaster()
-	#    Static broadcaster sends a transformation
-	#    that is true for all time
-	tfsbr = tf2_ros.StaticTransformBroadcaster()
+    # Setup the static transform broadcaster
+    # The static transform is constant and does not change over time
+    tfsbr = tf2_ros.StaticTransformBroadcaster()
 
-	send_tf_camera()
+    # Uncomment the following line if you want to use a dynamic transform broadcaster
+    # The dynamic transform will update in real-time, reflecting the UAV's movements
+    # tfbr = tf2_ros.TransformBroadcaster()
 
-	rospy.loginfo("tf2_broadcaster_frames running.")
+    # Send the static transform from the UAV to the camera
+    send_tf_camera()
 
-	try:
-		rospy.spin()
-	except rospy.exceptions.ROSInterruptException:
-		pass
-	finally:
-		rospy.loginfo("tf2_broadcaster_frames shutting down")
+    # Log information indicating that the node is running
+    rospy.loginfo("tf2_broadcaster_frames running.")
+
+    # Keep the node alive and responsive until it is shut down
+    try:
+        rospy.spin()
+    except rospy.ROSInterruptException:
+        # Log information in case the node is interrupted
+        rospy.loginfo("tf2_broadcaster_frames shutting down.")
