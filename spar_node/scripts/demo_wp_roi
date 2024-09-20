@@ -34,11 +34,11 @@ class Guidance():
 		# initialise battery percentage (for testing)
 		self.battery_per = 1.0
 
-		## Variables necessary for the mission
-		self.aruco_found = False
-		self.desired_aruco_id = 0
+		# Aruco Variables
+		self.desired_aruco_id = 0 # Changed to the aruco marker to land
 		self.current_aruco_id = -1
 		self.previous_aruco_id = -1
+		self.FoundAruco = False # If aruco is not found, land at origin (aruco landing contigency)
 
 		# Camera Variables
 		self.camera_FOV_x = 54 * (pi / 180) # [rad]
@@ -53,9 +53,6 @@ class Guidance():
 		# This will stop our "waypoint is reached" callback from firing
 		# during the roi diversion and taking over our flight!
 		self.performing_roi = False
-
-		# If aruco is not found, land at origin (aruco landing contigency)
-		self.FoundAruco = False
 
 		# Landing initialisation flag (to only run aruco_land once)
 		self.aruco_land_initialised = False
