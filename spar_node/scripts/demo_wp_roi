@@ -36,7 +36,9 @@ class Guidance():
 
 		## Variables necessary for the mission
 		self.aruco_found = False
-		self.aruco_id = 0
+		self.desired_aruco_id = 0
+		self.current_aruco_id = -1
+		self.previous_aruco_id = -1
 
 		# Camera Variables
 		self.camera_FOV_x = 54 * (pi / 180) # [rad]
@@ -108,7 +110,7 @@ class Guidance():
 			# Safe landing subscriber (for low battery status)
 			self.sub_battery = rospy.Subscriber('/mavros/battery',BatteryState,self.callback_battery)
 			
-			# GCS LAND VOCAL
+			# Published for GCS VOCAL
 			self.pub_land_vocal = rospy.Publisher('vocal/land', Bool, queue_size = 10)
 			self.pub_aruco_vocal = rospy.Publisher('vocal/aruco', Int32, queue_size = 10)
 
@@ -149,30 +151,20 @@ class Guidance():
 	def callback_aruco_marker(self, msg_in):
 		# Only run ArUco detection if the UAV is at the desired flight height (Reached the first waypoint, and not performing ROI tasks)
 		if self.reached_wp_1 and not self.performing_roi:
-			if not self.aruco_found:
+			self.current_aruco_id = msg_in.aruco_id # saved the detected aruco to current
+			# Only runs in the initial detection
+			if self.current_aruco_id != self.previous_aruco_id:
+				self.pub_aruco_vocal.publish(msg_in.aruco_id) # published the id for the GCS
 				rospy.loginfo('ArUco Found!')
-				# self.FoundAruco = True # Set found aruco flag
-				# Store the first ArUco marker, regardless of ID
-				# if self.aruco_id == -1:
-				# 	aruco_location = self.aruco_frame_translation([msg_in.frame_x, msg_in.frame_y])
-				# 	rospy.loginfo(f'UAV Location at x: {self.current_location.x}, y: {self.current_location.y}')
-				# 	rospy.loginfo(f'ArUco Marker {msg_in.aruco_id} Detected at x: {aruco_location[0]}, y: {aruco_location[1]}')
-				# 	# Update the landing location to the current loation when an ArUco marker is found
-				# 	#self.landing_wp = [self.current_location.x, self.current_location.y, flight_height, pi]
-				# 	## Change if aruco location is outputted correctly above
-				# 	self.landing_wp = [aruco_location[0], aruco_location[1], flight_height, pi]
-				# 	self.aruco_found = True
-				if msg_in.aruco_id == self.aruco_id:
-					self.FoundAruco = True
-					self.pub_aruco_vocal.publish(msg_in.aruco_id)
-					aruco_location = self.aruco_frame_translation([msg_in.frame_x, msg_in.frame_y])
+				# Check if the found aruco is the desired aruco
+				if self.desired_aruco_id == msg_in.aruco_id:
+					aruco_location = self.aruco_frame_translation([msg_in.frame_x, msg_in.frame_y]) # transform the location to usable location
+					# Display the location of the uav and aruco
 					rospy.loginfo(f'UAV Location at x: {self.current_location.x}, y: {self.current_location.y}')
-					rospy.loginfo(f'ArUco Marker {msg_in.aruco_id} Detected at x: {aruco_location[0]}, y: {aruco_location[1]}')
-					# Update the landing location to the current loation when an ArUco marker is found
-					# self.landing_wp = [self.current_location.x, self.current_location.y, flight_height, pi]
-					## Change if aruco location is outputted correctly above
-					self.landing_wp = [aruco_location[0], aruco_location[1], flight_height, pi]
-					self.aruco_found = True
+					rospy.loginfo(f'Desired Aruco Marker {msg_in.aruco_id} Detected at x: {aruco_location[0]}, y: {aruco_location[1]}')
+					self.landing_wp = [aruco_location[0], aruco_location[1], flight_height, 0] # Store the location
+					self.FoundAruco = True # Flag that the desired aruco marker is found
+				self.previous_aruco_id = self.current_aruco_id
 
 	# This function will check receive the current pose of the UAV constantly
 	def callback_pose(self, msg_in):
