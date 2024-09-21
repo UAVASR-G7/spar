@@ -53,6 +53,7 @@ find_package(catkin REQUIRED COMPONENTS
  add_message_files(
    FILES
    ArucoLocalisation.msg
+   TargetLocalisation.msg
  )
 
 ## Generate services in the 'srv' folder
