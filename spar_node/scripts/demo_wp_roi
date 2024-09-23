@@ -7,14 +7,15 @@ import time
 
 import rospy
 import actionlib
+import tf2_ros
 from actionlib_msgs.msg import GoalStatus
-from geometry_msgs.msg import Point, PoseStamped
+from geometry_msgs.msg import Point, PoseStamped, TransformStamped
 from nav_msgs.msg import Path
-from spar_msgs.msg import FlightMotionAction, FlightMotionGoal, ArucoLocalisation
+from spar_msgs.msg import FlightMotionAction, FlightMotionGoal, ArucoLocalisation, TargetLocalisation
 from breadcrumb.srv import RequestPath, RequestPathRequest
 from sensor_msgs.msg import BatteryState
-from std_msgs.msg import Bool
-from std_msgs.msg import Int32
+from std_msgs.msg import Bool, Time
+from std_msgs.msg import Int32, UInt32MultiArray
 
 # This is getting a bit more complicated now, so we'll put our information in
 # a class to keep track of all of our variables. This is not so much different
@@ -29,7 +30,7 @@ class Guidance():
 	def __init__(self, waypoints):
 		# Make sure we have a valid waypoint list
 		if not self.check_waypoints(waypoints):
-			print("Invalid waypoint list input!, reccommend abort")
+			print("Invalid waypoint list input!, recommend abort")
 
 		# initialise battery percentage (for testing)
 		self.battery_per = 1.0
@@ -39,6 +40,10 @@ class Guidance():
 		self.current_aruco_id = -1
 		self.previous_aruco_id = -1
 		self.FoundAruco = False # If aruco is not found, land at origin (aruco landing contigency)
+
+		# Variables for the target
+		self.epipen_drop = False
+		self.plb_tracker_drop = False
 
 		# Camera Variables
 		self.camera_FOV_x = 54 * (pi / 180) # [rad]
@@ -110,9 +115,17 @@ class Guidance():
 			# Published for GCS VOCAL
 			self.pub_land_vocal = rospy.Publisher('vocal/land', Bool, queue_size = 10)
 			self.pub_aruco_vocal = rospy.Publisher('vocal/aruco', Int32, queue_size = 10)
+			self.pub_target_vocal = rospy.Publisher('vocal/target', TargetLocalisation, queue_size = 10)
 
 			# Subscriber for ArUco Marker Detection
 			self.sub_aruco = rospy.Subscriber('/processed_aruco/localisation', ArucoLocalisation, self.callback_aruco_marker)
+
+			# Subscriber for Target Detection
+			self.sub_target = rospy.Subscriber('target_detection/localisation', TargetLocalisation, self.callback_target)
+			self.pub_found = rospy.Publisher('/emulated_uav/target_found', Time, queue_size=10)
+
+			# Setup tf2 broadcaster and timestamp publisher
+			self.tfbr = tf2_ros.TransformBroadcaster()
 
 			# If shutdown is issued (eg. CTRL+C), cancel current mission before rospy is shutdown.
 			rospy.on_shutdown(lambda : self.shutdown())
@@ -162,6 +175,63 @@ class Guidance():
 					self.landing_wp = [aruco_location[0], aruco_location[1], flight_height, 0] # Store the location
 					self.FoundAruco = True # Flag that the desired aruco marker is found
 				self.previous_aruco_id = self.current_aruco_id
+
+	def send_tf_target(self):
+		# Generate our "found" timestamp
+		time_found = rospy.Time.now()
+
+		# Create a transform arbitrarily in the
+		# camera frame
+		t = TransformStamped()
+		t.header.stamp = time_found
+		t.header.frame_id = "camera"
+		t.child_frame_id = "target"
+
+		t.transform.translation.x = -0.4
+		t.transform.translation.y = 0.2
+		t.transform.translation.z = 1.5 - 0.15
+		t.transform.rotation.x = 0.0
+		t.transform.rotation.y = 0.0
+		t.transform.rotation.z = 0.0
+		t.transform.rotation.w = 1.0
+
+		# Send the transformation to TF
+		# and "found" timestamp to localiser
+		self.tfbr.sendTransform(t)
+		self.pub_found.publish(time_found)
+
+	def callback_target(self, msg_in):
+		# Only run target detection if the UAV is at the desired flight height (Reached the first waypoint, and not performing ROI tasks)
+		if self.reached_wp_1 and not self.performing_roi:	
+			if msg_in.target_id == 0: # Target is the backpack
+				if not self.epipen_drop: # Only call this functionality on the first observation of the astronaut
+					backpack_location = self.target_frame_translation([msg_in.frame_x, msg_in.frame_y])		
+					rospy.loginfo(f'Target {msg_in.target_label} Found at x: {backpack_location[0]}, y: {backpack_location[1]}!')
+					self.pub_target_vocal.publish(msg_in) # Send the target id, label, x, y
+					# rospy.sleep(rospy.Duration(2))
+					# Send out our target messages
+					self.send_tf_target()
+					# Give the nodes a few seconds to transmit data
+					# then we can exit
+					rospy.sleep(rospy.Duration(2))
+					rospy.loginfo("tf2_broadcaster_target sent TF and timestamp")
+					self.epipen_drop = True
+					
+			elif msg_in.target_id == 1: # Target is the person
+				if not self.plb_tracker_drop: # Only call this functionality on the first observation of the astronaut
+					person_location = self.target_frame_translation([msg_in.frame_x, msg_in.frame_y])		
+					rospy.loginfo(f'Target [{msg_in.target_label}] Found at x: {person_location[0]}, y: {person_location[1]}!')
+					self.pub_target_vocal.publish(msg_in) # Send the target id, label, x, y
+					# Give the nodes a few seconds to configure
+					# rospy.sleep(rospy.Duration(2))
+					self.send_tf_target() # Send out our target messages
+					rospy.sleep(rospy.Duration(2))
+					rospy.loginfo("tf2_broadcaster_target sent TF and timestamp")
+					# Give the nodes a few seconds to transmit data
+					# then we can exit
+					self.plb_tracker_drop = True
+			else:
+				rospy.loginfo('Unknown Target')
 
 	# This function will check receive the current pose of the UAV constantly
 	def callback_pose(self, msg_in):
@@ -214,6 +284,30 @@ class Guidance():
 		# The input camera location is given as the pixel position of the aruco centroid within the frame
 		camera_offset_x = (208 - camera_location[0]) / 208
 		camera_offset_y = (208 - camera_location[1]) / 208
+
+		# The offset from the UAV of the target, based on the location within the camera frame
+		offset_x = camera_offset_x * flight_height * tan(self.camera_FOV_x / 2) 
+		offset_y = camera_offset_y * flight_height * tan(self.camera_FOV_y / 2) 
+
+		# Add the offset to the initial location to determine the target location
+		world_x += offset_x
+		world_y += offset_y
+
+		# Store the world location in a single array to be returned by the function
+		world_location = [world_x, world_y]
+		return world_location
+	
+	# This function is used to translate between the camera frame and the world location when undertaking aruco detection
+	def target_frame_translation(self, camera_location):
+		# The initial location of the UAV
+		world_x = self.current_location.x
+		world_y = self.current_location.y
+
+		# Normalised position of the target within the camera frame [-1, 1] in both x- and y-directions
+		# Positive values correspond to positive values in the world frame
+		# The input camera location is given as the pixel position of the aruco centroid within the frame
+		camera_offset_x = (0.5 - camera_location[0]) / 0.5
+		camera_offset_y = (0.5 - camera_location[1]) / 0.5
 
 		# The offset from the UAV of the target, based on the location within the camera frame
 		offset_x = camera_offset_x * flight_height * tan(self.camera_FOV_x / 2) 
@@ -530,9 +624,14 @@ def main(args):
 
 	# Generate waypoint list using generate_waypoints(...); returns wps_generated
 	waypoints = generate_waypoints(width=8,height=5,alt=flight_height)
-	
+	wps = [[ 0.0, 0.0, 1.0, 0.0],
+		[ 1.0, 1.0, 1.0, 0.0],
+		[-1.0, 1.0, 1.0, 0.0],
+		[-1.0,-1.0, 1.0, 0.0],
+		[ 1.0,-1.0, 1.0, 0.0],
+		[ 0.0, 0.0, 1.0, 0.0]]
 	# send wps_pathplanned into Guidance "Guidance(wps_path_planned)"
-	guide = Guidance(waypoints)
+	guide = Guidance(wps)
 
 	# Spin!
 	rospy.spin()
