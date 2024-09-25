@@ -187,9 +187,9 @@ class Guidance():
 		t.header.frame_id = "camera"
 		t.child_frame_id = "target"
 
-		t.transform.translation.x = -0.4
-		t.transform.translation.y = 0.2
-		t.transform.translation.z = 1.5 - 0.15
+		t.transform.translation.x = 0
+		t.transform.translation.y = 0
+		t.transform.translation.z = flight_height - 0.15
 		t.transform.rotation.x = 0.0
 		t.transform.rotation.y = 0.0
 		t.transform.rotation.z = 0.0
@@ -631,7 +631,7 @@ def main(args):
 		[ 1.0,-1.0, 1.0, 0.0],
 		[ 0.0, 0.0, 1.0, 0.0]]
 	# send wps_pathplanned into Guidance "Guidance(wps_path_planned)"
-	guide = Guidance(wps)
+	guide = Guidance(waypoints)
 
 	# Spin!
 	rospy.spin()
