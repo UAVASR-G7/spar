@@ -123,6 +123,7 @@ class Guidance():
 			# Subscriber for Target Detection
 			self.sub_target = rospy.Subscriber('target_detection/localisation', TargetLocalisation, self.callback_target)
 			self.pub_found = rospy.Publisher('/emulated_uav/target_found', Time, queue_size=10)
+			self.pub_target_label = rospy.Publisher('payload/target', String, queue_size=10)
 
 			# Setup tf2 broadcaster and timestamp publisher
 			self.tfbr = tf2_ros.TransformBroadcaster()
@@ -211,6 +212,7 @@ class Guidance():
 					# rospy.sleep(rospy.Duration(2))
 					# Send out our target messages
 					self.send_tf_target()
+					self.pub_target_label.publish(msg_in.target_label)
 					# Give the nodes a few seconds to transmit data
 					# then we can exit
 					rospy.sleep(rospy.Duration(2))
@@ -225,6 +227,7 @@ class Guidance():
 					# Give the nodes a few seconds to configure
 					# rospy.sleep(rospy.Duration(2))
 					self.send_tf_target() # Send out our target messages
+					self.pub_target_label.publish(msg_in.target_label)
 					rospy.sleep(rospy.Duration(2))
 					rospy.loginfo("tf2_broadcaster_target sent TF and timestamp")
 					# Give the nodes a few seconds to transmit data
@@ -260,6 +263,7 @@ class Guidance():
 
 		self.send_wp(dwp)
 		rospy.loginfo("Reached diversion ROI!")
+		
 		rospy.sleep(rospy.Duration(10)) # 10 sec to drop payload
 		# XXX: Do something? drop payload
 		rospy.loginfo("Returning to flight plan...")
@@ -583,7 +587,11 @@ def generate_waypoints(width,height,alt):
 	# Check all generated waypoints are within bounds (height, width & alt)
 	within_bounds = True
 	for wp in waypoints:
-		x, y, z, _ = wp # "_" ignores YAW
+		x, y, z, _ = wp # "_" ignores YAWssh: Could not resolve hostname github.com: Temporary failure in name resolution
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists
 		if not (-height/2 <= y <= height/2 and -width/2 <= x <= width/2 and z <= alt):
 			within_bounds = False
 			print(f"Waypoint {wp} is out of bounds!, all waypoints nulled")
