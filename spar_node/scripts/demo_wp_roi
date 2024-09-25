@@ -14,7 +14,7 @@ from nav_msgs.msg import Path
 from spar_msgs.msg import FlightMotionAction, FlightMotionGoal, ArucoLocalisation, TargetLocalisation
 from breadcrumb.srv import RequestPath, RequestPathRequest
 from sensor_msgs.msg import BatteryState
-from std_msgs.msg import Bool, Time
+from std_msgs.msg import Bool, Time, String
 from std_msgs.msg import Int32, UInt32MultiArray
 
 # This is getting a bit more complicated now, so we'll put our information in
@@ -115,7 +115,7 @@ class Guidance():
 			# Published for GCS VOCAL
 			self.pub_land_vocal = rospy.Publisher('vocal/land', Bool, queue_size = 10)
 			self.pub_aruco_vocal = rospy.Publisher('vocal/aruco', Int32, queue_size = 10)
-			self.pub_target_vocal = rospy.Publisher('vocal/target', TargetLocalisation, queue_size = 10)
+			self.pub_target_vocal = rospy.Publisher('payload/target', TargetLocalisation, queue_size = 10)
 
 			# Subscriber for ArUco Marker Detection
 			self.sub_aruco = rospy.Subscriber('/processed_aruco/localisation', ArucoLocalisation, self.callback_aruco_marker)
@@ -123,7 +123,7 @@ class Guidance():
 			# Subscriber for Target Detection
 			self.sub_target = rospy.Subscriber('target_detection/localisation', TargetLocalisation, self.callback_target)
 			self.pub_found = rospy.Publisher('/emulated_uav/target_found', Time, queue_size=10)
-			self.pub_target_label = rospy.Publisher('payload/target', String, queue_size=10)
+			self.pub_target_label = rospy.Publisher('payload/target', TargetLocalisation, queue_size=10)
 
 			# Setup tf2 broadcaster and timestamp publisher
 			self.tfbr = tf2_ros.TransformBroadcaster()
@@ -212,7 +212,8 @@ class Guidance():
 					# rospy.sleep(rospy.Duration(2))
 					# Send out our target messages
 					self.send_tf_target()
-					self.pub_target_label.publish(msg_in.target_label)
+					self.pub_target_label.publish(msg_in)
+					rospy.loginfo('data published to payload')
 					# Give the nodes a few seconds to transmit data
 					# then we can exit
 					rospy.sleep(rospy.Duration(2))
@@ -227,7 +228,8 @@ class Guidance():
 					# Give the nodes a few seconds to configure
 					# rospy.sleep(rospy.Duration(2))
 					self.send_tf_target() # Send out our target messages
-					self.pub_target_label.publish(msg_in.target_label)
+					self.pub_target_label.publish(msg_in)
+					rospy.loginfo('data published to payload')
 					rospy.sleep(rospy.Duration(2))
 					rospy.loginfo("tf2_broadcaster_target sent TF and timestamp")
 					# Give the nodes a few seconds to transmit data
@@ -587,11 +589,8 @@ def generate_waypoints(width,height,alt):
 	# Check all generated waypoints are within bounds (height, width & alt)
 	within_bounds = True
 	for wp in waypoints:
-		x, y, z, _ = wp # "_" ignores YAWssh: Could not resolve hostname github.com: Temporary failure in name resolution
-fatal: Could not read from remote repository.
+		x, y, z, _ = wp 
 
-Please make sure you have the correct access rights
-and the repository exists
 		if not (-height/2 <= y <= height/2 and -width/2 <= x <= width/2 and z <= alt):
 			within_bounds = False
 			print(f"Waypoint {wp} is out of bounds!, all waypoints nulled")
