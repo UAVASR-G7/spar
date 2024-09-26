@@ -37,6 +37,7 @@ class Guidance():
 
 		# Aruco Variables
 		self.FoundAruco = False # If aruco is not found, land at origin (aruco landing contigency)
+		self.TargetLabel = TargetLocalisation()
 
 		# Internal counter to see what waypoint were are up to
 		self.waypoint_counter = 0
@@ -103,7 +104,6 @@ class Guidance():
 			
 			# Published for GCS VOCAL
 			self.pub_land_vocal = rospy.Publisher('vocal/land', Bool, queue_size = 10)
-			self.pub_target_vocal = rospy.Publisher('payload/target', TargetLocalisation, queue_size = 10)
 
 			# Subscriber for ArUco Marker Detection
 			self.sub_aruco = rospy.Subscriber('/processed_aruco/localisation', ArucoLocalisation, self.callback_aruco_marker)
@@ -111,6 +111,7 @@ class Guidance():
 			# Subscriber for Target Detection
 			self.sub_target = rospy.Subscriber('target_detection/localisation', TargetLocalisation, self.callback_target)
 			self.pub_found = rospy.Publisher('/emulated_uav/target_found', Time, queue_size=10)
+			self.sub_target_tf = rospy.Subscriber('target_detection/tf', TransformStamped, self.send_tf_target)
 			self.pub_target_label = rospy.Publisher('payload/target', TargetLocalisation, queue_size=10)
 
 			# Setup tf2 broadcaster and timestamp publisher
@@ -152,72 +153,16 @@ class Guidance():
 		self.landing_wp = [msg_in.frame_x, msg_in.frame_y, flight_height, 0] # Store the location
 		rospy.loginfo(f'Received Aruco land location. ID: {msg_in.aruco_id} Detected at x: {msg_in.frame_x}, y: {msg_in.frame_y}')
 
-	def send_tf_target(self):
-		# Generate our "found" timestamp
-		time_found = rospy.Time.now()
-
-		# Create a transform arbitrarily in the
-		# camera frame
-		t = TransformStamped()
-		t.header.stamp = time_found
-		t.header.frame_id = "camera"
-		t.child_frame_id = "target"
-
-		t.transform.translation.x = 0
-		t.transform.translation.y = 0
-		t.transform.translation.z = flight_height - 0.15
-		t.transform.rotation.x = 0.0
-		t.transform.rotation.y = 0.0
-		t.transform.rotation.z = 0.0
-		t.transform.rotation.w = 1.0
-
-		# Send the transformation to TF
-		# and "found" timestamp to localiser
-		self.tfbr.sendTransform(t)
-		self.pub_found.publish(time_found)
+	def send_tf_target(self, msg_in):
+		self.tfbr.sendTransform(msg_in)
+		self.pub_found.publish(msg_in.header.stamp)
 
 	def callback_target(self, msg_in):
 		if not self.performing_roi:
 			rospy.loginfo(f'UAV Location at x: {self.current_location.x}, y: {self.current_location.y}, z: {self.current_location.z}')
 			rospy.loginfo(f'Target [{msg_in.target_label}] Detected at x: {msg_in.frame_x}, y: {msg_in.frame_y}')
-			self.send_tf_target()
+			self.TargetLabel = msg_in
 			rospy.sleep(rospy.Duration(2))
-
-		# # Only run target detection if the UAV is at the desired flight height (Reached the first waypoint, and not performing ROI tasks)
-		# if self.reached_wp_1 and not self.performing_roi:	
-		# 	if msg_in.target_id == 0: # Target is the backpack
-		# 		if not self.epipen_drop: # Only call this functionality on the first observation of the astronaut
-		# 			backpack_location = self.target_frame_translation([msg_in.frame_x, msg_in.frame_y])		
-		# 			rospy.loginfo(f'Target {msg_in.target_label} Found at x: {backpack_location[0]}, y: {backpack_location[1]}!')
-		# 			self.pub_target_vocal.publish(msg_in) # Send the target id, label, x, y
-		# 			# rospy.sleep(rospy.Duration(2))
-		# 			# Send out our target messages
-		# 			self.send_tf_target()
-		# 			self.pub_target_label.publish(msg_in)
-		# 			rospy.loginfo('data published to payload')
-		# 			# Give the nodes a few seconds to transmit data
-		# 			# then we can exit
-		# 			rospy.sleep(rospy.Duration(2))
-		# 			rospy.loginfo("tf2_broadcaster_target sent TF and timestamp")
-		# 			self.epipen_drop = True
-					
-		# 	elif msg_in.target_id == 1: # Target is the person
-		# 		if not self.plb_tracker_drop: # Only call this functionality on the first observation of the astronaut
-		# 			person_location = self.target_frame_translation([msg_in.frame_x, msg_in.frame_y])		
-		# 			rospy.loginfo(f'Target [{msg_in.target_label}] Found at x: {person_location[0]}, y: {person_location[1]}!')
-		# 			self.pub_target_vocal.publish(msg_in) # Send the target id, label, x, y
-		# 			# Give the nodes a few seconds to configure
-		# 			# rospy.sleep(rospy.Duration(2))
-		# 			self.send_tf_target() # Send out our target messages
-		# 			self.pub_target_label.publish(msg_in)
-		# 			rospy.loginfo('data published to payload')
-		# 			rospy.sleep(rospy.Duration(2))
-		# 			rospy.loginfo("tf2_broadcaster_target sent TF and timestamp")
-		# 			# Give the nodes a few seconds to transmit data
-		# 			# then we can exit
-		# 			self.plb_tracker_drop = True
-		# 	else:
-		# 		rospy.loginfo('Unknown Target')
 
 	# This function will check receive the current pose of the UAV constantly
 	def callback_pose(self, msg_in):
@@ -247,6 +192,10 @@ class Guidance():
 		self.send_wp(dwp)
 		rospy.loginfo("Reached diversion ROI!")
 		
+		# Publish the target label to payload system to drop the appropriate package
+		self.pub_target_label.publish(self.TargetLabel)
+		rospy.loginfo("Payload command send")
+
 		rospy.sleep(rospy.Duration(10)) # 10 sec to drop payload
 		# XXX: Do something? drop payload
 		rospy.loginfo("Returning to flight plan...")
