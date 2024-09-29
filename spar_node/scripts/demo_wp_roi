@@ -24,7 +24,7 @@ from std_msgs.msg import Int32, UInt32MultiArray
 # i.e. it will have it's own publishers, subscribers, etc., that
 # will call it's own functions as callbacks, etc.
 global flight_height
-flight_height = 2.2
+flight_height = 2.1
 
 class Guidance():
 	def __init__(self, waypoints):
@@ -32,21 +32,18 @@ class Guidance():
 		if not self.check_waypoints(waypoints):
 			print("Invalid waypoint list input!, recommend abort")
 
-		# initialise battery percentage (for testing)
-		self.battery_per = 1.0
-
 		# Aruco Variables
 		self.FoundAruco = False # If aruco is not found, land at origin (aruco landing contigency)
 		self.TargetLabel = TargetLocalisation()
 
+		# initialise battery percentage
+		self.battery_per = 1.0
+
 		# Internal counter to see what waypoint were are up to
 		self.waypoint_counter = 0
-		self.reached_wp_1 = False # roi flag for target 1?
+		#self.reached_wp_1 = False 
 
-		# Set a flag to indicate that we are doing a specific inspection
-		# and that we are not following our waypoint list
-		# This will stop our "waypoint is reached" callback from firing
-		# during the roi diversion and taking over our flight!
+		# performing ROI flag
 		self.performing_roi = False
 
 		# Landing initialisation flag (to only run aruco_land once)
@@ -63,19 +60,18 @@ class Guidance():
 		rospy.wait_for_service('/breadcrumb/request_path')
 		self.srvc_bc = rospy.ServiceProxy('/breadcrumb/request_path',RequestPath)
 
-		# Save the input waypoints
+		# Save the input waypoints within guidance()
 		self.waypoints = waypoints
 
 		# Make some space to record down our current location
 		self.current_location = Point()
 
-		# Set our linear and rotational velocities for the flight
-		self.vel_linear = rospy.get_param("~vel_linear",0.6) # edit speed here
+		# Set our linear and rotational velocities for the flight (from launch file)
+		self.vel_linear = rospy.get_param("~vel_linear",0.6)
 		self.vel_yaw = rospy.get_param("~vel_yaw", 0.2)
-
-		# Set our position and yaw waypoint accuracies
-		self.accuracy_pos = rospy.get_param("~acc_pos", 0.2) # edit acc_pos here 
-		self.accuracy_yaw = rospy.get_param("~acc_yaw", 0.1)
+		self.vel_vert = rospy.get_param("~vel_vert",0.3)
+		self.acc_pos = rospy.get_param("~acc_pos",0.1)
+		self.acc_yaw = rospy.get_param("acc_yaw",0.1)
 
 		# Create our action client
 		action_ns = rospy.get_param("~action_topic", 'spar/flight')
@@ -87,12 +83,12 @@ class Guidance():
 			# Good to go, start mission
 			rospy.loginfo("Starting waypoint mission / Starting Callbacks")
 
-			# Setup first waypoint segment
-			# XXX:	Another option would be to do "takeoff" and leave "waypoint_counter = 0" to
-			#		begin the mission at the first waypoint after take-off
+			# create a controlled takeoff (0th wp needs to be above origin, for path planning purposes)
+			self.takeoff()
 			self.send_wp(self.waypoints[0])
 			self.waypoint_counter += 1
 
+			#### subscribers ####
 			# Setup a timer to check if our waypoint has completed at 20Hz
 			self.timer = rospy.Timer(rospy.Duration(1.0/20.0), self.check_waypoint_status)
 			# Callback to save "current location" such that we can perform and return from a diversion to the correct location
@@ -101,17 +97,19 @@ class Guidance():
 			self.sub_roi = rospy.Subscriber("~roi", PoseStamped, self.callback_inspect_roi)
 			# Safe landing subscriber (for low battery status)
 			self.sub_battery = rospy.Subscriber('/mavros/battery',BatteryState,self.callback_battery)
-			
-			# Published for GCS VOCAL
-			self.pub_land_vocal = rospy.Publisher('vocal/land', Bool, queue_size = 10)
-
 			# Subscriber for ArUco Marker Detection
 			self.sub_aruco = rospy.Subscriber('/processed_aruco/localisation', ArucoLocalisation, self.callback_aruco_marker)
-
-			# Subscriber for Target Detection
+			# Target Detection Subscriber (recieve target location from ITA)
 			self.sub_target = rospy.Subscriber('target_detection/localisation', TargetLocalisation, self.callback_target)
-			self.pub_found = rospy.Publisher('/emulated_uav/target_found', Time, queue_size=10)
+			# Target tf subscriber (recieve tf from ITA)
 			self.sub_target_tf = rospy.Subscriber('target_detection/tf', TransformStamped, self.send_tf_target)
+
+			#### publishers ####
+			# Publisher for GCS VOCAL
+			self.pub_land_vocal = rospy.Publisher('vocal/land', Bool, queue_size = 10)
+			# Target Found Publisher (publish time target was found)
+			self.pub_found = rospy.Publisher('/emulated_uav/target_found', Time, queue_size=10)
+			# Target ID/Label Publisher (publish for payload)
 			self.pub_target_label = rospy.Publisher('payload/target', TargetLocalisation, queue_size=10)
 
 			# Setup tf2 broadcaster and timestamp publisher
@@ -124,29 +122,6 @@ class Guidance():
 		self.battery_per = msg_in.percentage
 		Bat = '/mavros/battery'
 		#print(f"callback received topic value is:{Bat}")
-
-	def low_battery_landing(self,timer=None):
-		if self.battery_per <= 0.07 and not self.crit_bat_land_init:
-			self.crit_bat_land_init = True
-			print(f"Battery Percentage Critical: {self.battery_per}")
-			print("Aborting Mission, Landing at current position")
-			self.spar_client.cancel_goal()
-			goal = FlightMotionGoal()
-			goal.motion = FlightMotionGoal.MOTION_LAND
-			goal.velocity_vertical = rospy.get_param("~speed", 0.2)
-			# Send the land signal/goals
-			rospy.loginfo("Sending landing signal...")
-			self.spar_client.send_goal(goal)
-			self.spar_client.wait_for_result()
-			# Output feedback on the landing result
-			result = self.spar_client.get_state()
-			if result == GoalStatus.SUCCEEDED:
-				rospy.loginfo("Landing complete!")
-				self.mission_completed = True
-				self.spar_client.cancel_goal() # cance goal to finish mission
-				self.shutdown()
-			else:
-				rospy.logerr("Landing failed!")
 
 	def callback_aruco_marker(self, msg_in):
 		self.FoundAruco = True
@@ -167,8 +142,67 @@ class Guidance():
 	# This function will check receive the current pose of the UAV constantly
 	def callback_pose(self, msg_in):
 		#rospy.loginfo("Pose Callback recieved/Triggered")
-		# Store the current position at all times so it can be accessed later
 		self.current_location = msg_in.pose.position
+
+	def low_battery_landing(self,timer=None):
+		if self.battery_per <= 0.07 and not self.crit_bat_land_init:
+			self.crit_bat_land_init = True
+			print(f"Battery Percentage Critical: {self.battery_per}")
+			print("Aborting Mission, Landing at current position")
+			self.spar_client.cancel_goal()
+			goal = FlightMotionGoal()
+			goal.motion = FlightMotionGoal.MOTION_LAND
+			goal.velocity_vertical = self.vel_vert
+			# Send the land signal/goals
+			rospy.loginfo("Sending landing signal...")
+			self.spar_client.send_goal(goal)
+			self.spar_client.wait_for_result()
+			# Output feedback on the landing result
+			result = self.spar_client.get_state()
+			if result == GoalStatus.SUCCEEDED:
+				rospy.loginfo("Landing complete!")
+				self.mission_completed = True
+				self.spar_client.cancel_goal() # cance goal to finish mission
+				self.shutdown()
+			else:
+				rospy.logerr("Landing failed!")
+
+	# This function will fire whenever we recieve a timer event (te) from rospy.Timer()
+	# The main purpose is to check if a waypoint has been reached,
+	# and if so, send out the next waypoint to continue the mission
+	def check_waypoint_status(self, te):
+		self.low_battery_landing()
+		# If we're performing the ROI diversion, then don't do
+		# anything here, as this is handled in that function
+		if not (self.performing_roi or self.mission_completed or self.crit_bat_land_init):
+			# if last send_wp/action succeeded run this if loop 
+			if self.spar_client.get_state() == GoalStatus.SUCCEEDED:
+				rospy.loginfo("Reached waypoint %i!" % (self.waypoint_counter))
+				# XXX:	Another check could go here to finish the mission early
+				#		if "all" inspection tasks have been completed
+				#		(Add in another "if" and make the waypoint counter check
+				#		 an "elif" check instead.
+				#		 i.e. if complete; elif more wps; else wps finished)
+				# only run this if loop if the spar_client is not waiting for a result
+				if self.waypoint_counter < (len(self.waypoints)):
+					# send generated waypoints to path_plan() for breadcrumb implementation
+					path_plan_wps = self.path_plan([self.waypoints[self.waypoint_counter-1],self.waypoints[self.waypoint_counter]])
+					# send path planned waypoints to send_wp()
+					for planned_path in path_plan_wps:
+						self.send_wp(planned_path)
+
+					# Increment our waypoint counter
+					self.waypoint_counter += 1
+					# This will allow for target dection to be started NOT IMPLEMENTED YET
+					
+				else: # land() will check for aruco
+					rospy.loginfo("Initiate Landing Sequence")
+					# send landing
+					self.aruco_land()
+
+			elif (self.spar_client.get_state() == GoalStatus.PREEMPTED) or (self.spar_client.get_state() == GoalStatus.ABORTED) or (self.spar_client.get_state() == GoalStatus.REJECTED):
+				rospy.loginfo("Mission cancelled!")
+				rospy.signal_shutdown("cancelled")
 
 	# This function will fire whenever a ROI pose message is sent
 	# It is also responsible for handling the ROI "inspection task"
@@ -208,12 +242,34 @@ class Guidance():
 		# Unset our flag that we are performing a diversion
 		# to allow the waypoint timer to take back over
 		self.performing_roi = False
-	
+
+	def takeoff(self):
+		# Create our goal for takeoff motion 
+		goal = FlightMotionGoal()
+		goal.motion = FlightMotionGoal.MOTION_TAKEOFF
+		goal.position.z = flight_height
+		goal.velocity_vertical = self.vel_vert
+		goal.wait_for_convergence = True
+		goal.position_radius = rospy.get_param("~position_radius", 0.1)
+		goal.yaw_range = rospy.get_param("~yaw_range", 0.1)
+
+		self.spar_client.send_goal(goal)	
+		self.spar_client.wait_for_result()
+		result = self.spar_client.get_state()
+		if result == GoalStatus.SUCCEEDED:
+			print(f"Takeoff Successful: Initialise Searching")
+		else:
+			print(f"takeoff goal failed, initialising landing sequence")
+			self.low_battery_landing() # land at current location
+
+		rospy.on_shutdown(lambda:self.spar_client.cancel_goal())
 	
 	def send_wp(self, wp):
 		# Make sure the waypoint is valid before continuing
 		if not self.check_waypoint(wp):
 			print("Invalid waypoint list input!, reccommend abort")
+		# cancel current goal if there is one
+		self.spar_client.cancel_goal()
 
 		# Build the flight goal
 		goal = FlightMotionGoal()
@@ -222,12 +278,12 @@ class Guidance():
 		goal.position.y = wp[1]
 		goal.position.z = wp[2]
 		goal.yaw = wp[3]
-		goal.velocity_vertical = self.vel_linear
+		goal.velocity_vertical = self.vel_vert
 		goal.velocity_horizontal = self.vel_linear
 		goal.yawrate = self.vel_yaw
 		goal.wait_for_convergence = True
-		goal.position_radius = self.accuracy_pos
-		goal.yaw_range = self.accuracy_yaw
+		goal.position_radius = self.acc_pos
+		goal.yaw_range = self.acc_yaw
 
 		# check goal status (need to do this whenever sending actions to UAV)
 		self.spar_client.send_goal(goal)
@@ -265,7 +321,7 @@ class Guidance():
 			# Create the goal object for landing
 			goal = FlightMotionGoal()
 			goal.motion = FlightMotionGoal.MOTION_LAND
-			goal.velocity_vertical = 0.25  # Set slow vertical landing velocity
+			goal.velocity_vertical = self.vel_vert  # Set slow vertical landing velocity
 			# Send the land signal/goals
 			rospy.loginfo("Sending landing signal...")
 			self.spar_client.send_goal(goal)
@@ -278,6 +334,7 @@ class Guidance():
 				rospy.loginfo("Landing complete!")
 				self.mission_completed = True
 				self.spar_client.cancel_goal() # cance goal to finish mission
+				self.shutdown() # shutdown nodes
 			else:
 				rospy.logerr("Landing failed!")
 			# set landing initialisation flag 
@@ -359,51 +416,12 @@ class Guidance():
 
 	# This function will make sure we shut down the node as safely as possible
 	def shutdown(self):
-		# Unregister anything that needs it here
+		# Unregister subscribers
 		self.sub_pose.unregister()
 		self.sub_roi.unregister()
-		self.timer.unregister()
+		#self.check_waypoint_status.unregister()
 		self.sub_battery.unregister()
-		self.spar_client.cancel_goal()
 		rospy.loginfo("Guidance stopped")
-
-	# This function will fire whenever we recieve a timer event (te) from rospy.Timer()
-	# The main purpose is to check if a waypoint has been reached,
-	# and if so, send out the next waypoint to continue the mission
-	def check_waypoint_status(self, te):
-		self.low_battery_landing()
-		# If we're performing the ROI diversion, then don't do
-		# anything here, as this is handled in that function
-		if not (self.performing_roi or self.mission_completed):
-			# if last send_wp/action succeeded run this if loop 
-			if self.spar_client.get_state() == GoalStatus.SUCCEEDED:
-				rospy.loginfo("Reached waypoint %i!" % (self.waypoint_counter))
-				# XXX:	Another check could go here to finish the mission early
-				#		if "all" inspection tasks have been completed
-				#		(Add in another "if" and make the waypoint counter check
-				#		 an "elif" check instead.
-				#		 i.e. if complete; elif more wps; else wps finished)
-				# only run this if loop if the spar_client is not waiting for a result
-				if self.waypoint_counter < (len(self.waypoints)):
-					# send generated waypoints to path_plan() for breadcrumb implementation
-					path_plan_wps = self.path_plan([self.waypoints[self.waypoint_counter-1],self.waypoints[self.waypoint_counter]])
-					# send path planned waypoints to send_wp()
-					for planned_path in path_plan_wps:
-						self.send_wp(planned_path)
-
-					# Increment our waypoint counter
-					self.waypoint_counter += 1
-					# This will allow for target dection to be started NOT IMPLEMENTED YET
-					
-
-				else: # land() will check for aruco
-					rospy.loginfo("Initiate Landing Sequence")
-					# send landing
-					self.aruco_land()
-
-			elif (self.spar_client.get_state() == GoalStatus.PREEMPTED) or (self.spar_client.get_state() == GoalStatus.ABORTED) or (self.spar_client.get_state() == GoalStatus.REJECTED):
-				rospy.loginfo("Mission cancelled!")
-				rospy.signal_shutdown("cancelled")
 
 def generate_waypoints(width,height,alt):
 	# Set altitude & YAW
