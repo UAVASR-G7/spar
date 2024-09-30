@@ -224,13 +224,14 @@ class Guidance():
 		#rospy.loginfo(self.current_location.x,self.current_location.y,self.current_location.z)
 
 		self.send_wp(dwp)
+		#rospy.sleep(rospy.Duration(5))
 		rospy.loginfo("Reached diversion ROI!")
 		
 		# Publish the target label to payload system to drop the appropriate package
 		self.pub_target_label.publish(self.TargetLabel)
 		rospy.loginfo("Payload command send")
 
-		rospy.sleep(rospy.Duration(10)) # 10 sec to drop payload
+		rospy.sleep(rospy.Duration(5)) # 10 sec to drop payload
 		# XXX: Do something? drop payload
 		rospy.loginfo("Returning to flight plan...")
 		self.send_wp(rwp)
@@ -334,6 +335,7 @@ class Guidance():
 				rospy.loginfo("Landing complete!")
 				self.mission_completed = True
 				self.spar_client.cancel_goal() # cance goal to finish mission
+				rospy.sleep(rospy.Duration(2))
 				self.shutdown() # shutdown nodes
 			else:
 				rospy.logerr("Landing failed!")
@@ -487,7 +489,7 @@ def generate_waypoints(width,height,alt):
 	print(f"y positions: {y_points}")
 	print(f"altitude: {alt}")
 
-	# Check all generated waypoints are within bounds (height, width & alt)
+	# Check all generated waypoints are within bounds (height, width & alt)�
 	within_bounds = True
 	for wp in waypoints:
 		x, y, z, _ = wp 
@@ -539,7 +541,7 @@ def main(args):
 		[ 1.0,-1.0, 1.0, 0.0],
 		[ 0.0, 0.0, 1.0, 0.0]]
 	# send wps_pathplanned into Guidance "Guidance(wps_path_planned)"
-	guide = Guidance(waypoints)
+	guide = Guidance(wps)
 
 	# Spin!
 	rospy.spin()
