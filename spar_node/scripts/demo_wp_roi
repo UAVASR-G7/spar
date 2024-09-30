@@ -541,7 +541,7 @@ def main(args):
 		[ 1.0,-1.0, 1.0, 0.0],
 		[ 0.0, 0.0, 1.0, 0.0]]
 	# send wps_pathplanned into Guidance "Guidance(wps_path_planned)"
-	guide = Guidance(wps)
+	guide = Guidance(waypoints)
 
 	# Spin!
 	rospy.spin()
