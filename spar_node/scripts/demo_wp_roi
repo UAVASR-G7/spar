@@ -243,7 +243,7 @@ class Guidance():
 		goal.position.z = flight_height
 		goal.velocity_vertical = self.vel_vert
 		goal.wait_for_convergence = True
-		goal.position_radius = rospy.get_param("~position_radius", 0.1)
+		goal.position_radius = rospy.get_param("~position_radius", 0.15)
 		goal.yaw_range = rospy.get_param("~yaw_range", 0.1)
 
 		self.spar_client.send_goal(goal)	
