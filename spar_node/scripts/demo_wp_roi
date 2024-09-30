@@ -114,7 +114,7 @@ class Guidance():
 
 	def callback_battery(self,msg_in): # callback for battery percentage tracking
 		self.battery_per = msg_in.percentage
-		Bat = '/mavros/battery'
+		#Bat = '/mavros/battery'
 		#print(f"callback received topic value is:{Bat}")
 
 	def callback_aruco_marker(self, msg_in):
@@ -198,9 +198,11 @@ class Guidance():
 	# It is also responsible for handling the ROI "inspection task"
 	def callback_inspect_roi(self, msg_in):
 		rospy.loginfo("ROI Callback recieved/triggered")
+
 		# Set our flag that we are performing the diversion
 		self.performing_roi = True
 		rospy.loginfo("Starting diversion to ROI...")
+
 		# Cancel the current goal (if there is one)
 		self.spar_client.cancel_goal()
 
@@ -213,25 +215,25 @@ class Guidance():
 		#rospy.loginfo("Return WP")
 		#rospy.loginfo(self.current_location.x,self.current_location.y,self.current_location.z)
 
+		# Send Diversion Waypoint
 		self.send_wp(dwp)
-		#rospy.sleep(rospy.Duration(5))
 		rospy.loginfo("Reached diversion ROI!")
 		
 		# Publish the target label to payload system to drop the appropriate package
 		self.pub_target_label.publish(self.TargetLabel)
-		rospy.loginfo("Payload command send")
+		rospy.loginfo("Payload command sent!")
 
-		rospy.sleep(rospy.Duration(5)) # 10 sec to drop payload
-		# XXX: Do something? drop payload
+		# Pause system to drop payload
+		rospy.sleep(rospy.Duration(5)) 
 		rospy.loginfo("Returning to flight plan...")
+
+		# Send Return Waypoint
 		self.send_wp(rwp)
 
-		# "waypoint_counter" represents the "next waypoint"
-		# "waypoint_counter - 1" represents the "current waypoint"
+		# "waypoint_counter" represents the "next waypoint"; "waypoint_counter - 1" represents the "current waypoint"
 		rospy.loginfo("Resuming flight plan from waypoint %i!" % (self.waypoint_counter - 1))
 		self.send_wp(self.waypoints[self.waypoint_counter - 1])
-		# Unset our flag that we are performing a diversion
-		# to allow the waypoint timer to take back over
+		# Unset our flag that we are performing a diversion to allow the waypoint timer to take back over
 		self.performing_roi = False
 
 	def takeoff(self):
