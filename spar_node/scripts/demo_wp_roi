@@ -37,7 +37,7 @@ class Guidance():
 		self.TargetLabel = TargetLocalisation()
 
 		# initialise battery percentage
-		self.battery_per = 1.0
+		self.battery_vol = 0
 
 		# Internal counter to see what waypoint were are up to
 		self.waypoint_counter = 0
@@ -96,7 +96,7 @@ class Guidance():
 			# Subscriber to catch "ROI" diversion commands
 			self.sub_roi = rospy.Subscriber("~roi", PoseStamped, self.callback_inspect_roi)
 			# Safe landing subscriber (for low battery status)
-			#self.sub_battery = rospy.Subscriber('/mavros/battery',BatteryState,self.callback_battery)
+			self.sub_battery = rospy.Subscriber('/mavros/battery',BatteryState,self.callback_battery)
 			# Subscriber for ArUco Marker Detection
 			self.sub_aruco = rospy.Subscriber('/processed_aruco/localisation', ArucoLocalisation, self.callback_aruco_marker)
 			# Target Detection Subscriber (recieve target location from ITA)
@@ -107,15 +107,16 @@ class Guidance():
 			self.pub_land_vocal = rospy.Publisher('vocal/land', Bool, queue_size = 10)
 			# Target ID/Label Publisher (publish for payload)
 			self.pub_target_label = rospy.Publisher('payload/target', TargetLocalisation, queue_size=10)
-
+			# Inside your class or node initialization
+			self.pub_roi_status = rospy.Publisher('/roi_status_flag', Bool, queue_size=10)
 
 			# If shutdown is issued (eg. CTRL+C), cancel current mission before rospy is shutdown.
 			rospy.on_shutdown(lambda : self.shutdown())
 
 	def callback_battery(self,msg_in): # callback for battery percentage tracking
-		self.battery_per = msg_in.voltage
-		#Bat = '/mavros/battery'
-		#print(f"callback received topic value is:{Bat}")
+		self.battery_vol = msg_in.voltage
+		#Bat_vol = '/mavros/battery'
+		#print(f"callback received topic value is:{Bat_vol}")
 
 	def callback_aruco_marker(self, msg_in):
 		self.FoundAruco = True
@@ -134,24 +135,24 @@ class Guidance():
 		#rospy.loginfo("Pose Callback recieved/Triggered")
 		self.current_location = msg_in.pose.position
 
-	#def low_battery_landing(self,timer=None):
-	#	if self.voltage <= 9.8 and not self.crit_bat_land_init:
-	#		self.crit_bat_land_init = True
-	#		print(f"Battery Percentage Critical: {self.battery_per}")
-	#		self.spar_client.cancel_goal()
-	#		goal = FlightMotionGoal()
-	#		goal.motion = FlightMotionGoal.MOTION_LAND
-	#		goal.velocity_vertical = self.vel_vert
-	#		# Send the land signal/goals
-	#		rospy.loginfo("Sending landing signal...")
-	#		self.spar_client.send_goal(goal)
-	#		# Output feedback on the landing result
-	#		result = self.spar_client.get_state()
-	#		if result == GoalStatus.SUCCEEDED:
-	#			rospy.loginfo("Landing complete!")
-	#			self.mission_completed = True
-	###		else:
-	#			rospy.logerr("Landing failed!")
+	def low_battery_landing(self,timer=None):
+		if self.battery_vol <= 9.7 and not self.crit_bat_land_init:
+			self.crit_bat_land_init = True
+			print(f"Battery Voltage Critical: {self.battery_per}")
+			self.spar_client.cancel_goal()
+			goal = FlightMotionGoal()
+			goal.motion = FlightMotionGoal.MOTION_LAND
+			goal.velocity_vertical = self.vel_vert
+			# Send the land signal/goals
+			rospy.loginfo("Sending landing signal...")
+			self.spar_client.send_goal(goal)
+			# Output feedback on the landing result
+			result = self.spar_client.get_state()
+			if result == GoalStatus.SUCCEEDED:
+				rospy.loginfo("Landing complete!")
+				self.mission_completed = True
+			else:
+				rospy.logerr("Landing failed!")
 
 	# This function will fire whenever we recieve a timer event (te) from rospy.Timer()
 	# The main purpose is to check if a waypoint has been reached,
@@ -215,12 +216,11 @@ class Guidance():
 		self.send_wp(dwp)
 		rospy.loginfo("Reached diversion ROI!")
 		
-		# Publish the target label to payload system to drop the appropriate package
-		self.pub_target_label.publish(self.TargetLabel)
-		rospy.loginfo("Payload command sent!")
+		# To publish the flag (True or False):
+		self.pub_roi_status.publish(Bool(data=True))  # Publishing the Bool message with data=True
 
 		# Pause system to drop payload
-		rospy.sleep(rospy.Duration(10)) 
+		rospy.sleep(rospy.Duration(5)) 
 		rospy.loginfo("Returning to flight plan...")
 
 		# Send Return Waypoint
