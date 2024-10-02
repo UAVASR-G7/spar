@@ -105,8 +105,8 @@ class Guidance():
 			#### publishers ####
 			# Publisher for GCS VOCAL
 			self.pub_land_vocal = rospy.Publisher('vocal/land', Bool, queue_size = 10)
-			# Target ID/Label Publisher (publish for payload)
-			self.pub_target_label = rospy.Publisher('payload/target', TargetLocalisation, queue_size=10)
+			# Target ID/Label Publisher (publish for payload) "This is published from depthai_publisher"
+			#self.pub_target_label = rospy.Publisher('payload/target', TargetLocalisation, queue_size=10)
 			# Inside your class or node initialization
 			self.pub_roi_status = rospy.Publisher('/roi_status_flag', Bool, queue_size=10)
 
@@ -216,12 +216,16 @@ class Guidance():
 		self.send_wp(dwp)
 		rospy.loginfo("Reached diversion ROI!")
 		
-		# To publish the flag (True or False):
+		# To publish the flag as True (to initiate payload drop)
+		rospy.loginfo("Payload roi_status_flag set to True!")
 		self.pub_roi_status.publish(Bool(data=True))  # Publishing the Bool message with data=True
 
 		# Pause system to drop payload
 		rospy.sleep(rospy.Duration(5)) 
 		rospy.loginfo("Returning to flight plan...")
+
+		# To reset the flag to False (to prepare for next payload)
+		self.pub_roi_status.publish(Bool(data=False))  # Publishing the Bool message with data=False
 
 		# Send Return Waypoint
 		self.send_wp(rwp)
