@@ -126,6 +126,7 @@ class Guidance():
 		self.FoundAruco = True
 		self.landing_wp = [msg_in.frame_x, msg_in.frame_y, flight_height, 0] # Store the location
 		rospy.loginfo(f'Received Aruco land location. ID: {msg_in.aruco_id} Detected at x: {msg_in.frame_x}, y: {msg_in.frame_y}')
+		display_target([msg_in.frame_x, msg_in.frame_y, 0, 0],"guidance/aruco_position")
 
 	def callback_target(self, msg_in):
 		if not self.performing_roi:
@@ -133,7 +134,7 @@ class Guidance():
 			rospy.loginfo(f'Target [{msg_in.target_label}] Detected at x: {msg_in.frame_x}, y: {msg_in.frame_y}')
 			self.TargetLabel = msg_in
 			rospy.sleep(rospy.Duration(2))
-			display_target([msg_in.frame_x,msg_in.frame_y,0],"/target_position")
+			display_target([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position")
 
 	# This function will check receive the current pose of the UAV constantly
 	def callback_pose(self, msg_in):
@@ -543,7 +544,7 @@ def display_target(target_position, topic_name):
     
     # Create the Marker message
     marker = Marker()
-    marker.header.frame_id = "/map"  # Adjust frame according to your setup
+    marker.header.frame_id = "map"  # Adjust frame according to your setup
     marker.header.stamp = rospy.Time.now()
     # Set the type of marker (SPHERE)
     marker.type = Marker.SPHERE
