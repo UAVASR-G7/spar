@@ -21,7 +21,7 @@ def publish_battery_state():
         battery_state.power_supply_status = BatteryState.POWER_SUPPLY_STATUS_DISCHARGING
 
         # Log the published message
-        rospy.loginfo("Publishing critical battery state: percentage=%.2f", battery_state.percentage)
+        rospy.loginfo("Publishing critical battery state: voltage=%.2f", battery_state.voltage)
 
         # Publish the battery state message
         battery_pub.publish(battery_state)

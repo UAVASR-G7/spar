@@ -37,7 +37,7 @@ class Guidance():
 		self.TargetLabel = TargetLocalisation()
 
 		# initialise battery percentage
-		self.battery_vol = 0
+		self.battery_vol = 15
 
 		# Internal counter to see what waypoint were are up to
 		self.waypoint_counter = 0
@@ -54,6 +54,9 @@ class Guidance():
 
 		# finished mission flag (to stop check_waypoint() running after aruco_land())
 		self.mission_completed = False
+
+		# roi counter (to index early landing functionality)
+		self.roi_counter = 0
 
 		# initialise bread crumb (wait for service to be published)
 		# srvc_bc is the service proxy object, once initialised can use to call a service like a function
@@ -138,7 +141,7 @@ class Guidance():
 	def low_battery_landing(self,timer=None):
 		if self.battery_vol <= 9.7 and not self.crit_bat_land_init:
 			self.crit_bat_land_init = True
-			print(f"Battery Voltage Critical: {self.battery_vol}")
+			print(f"Battery Voltage Critical!: {self.battery_vol}")
 			self.spar_client.cancel_goal()
 			goal = FlightMotionGoal()
 			goal.motion = FlightMotionGoal.MOTION_LAND
@@ -146,6 +149,7 @@ class Guidance():
 			# Send the land signal/goals
 			rospy.loginfo("Sending landing signal...")
 			self.spar_client.send_goal(goal)
+			self.spar_client.wait_for_result()
 			# Output feedback on the landing result
 			result = self.spar_client.get_state()
 			if result == GoalStatus.SUCCEEDED:
@@ -158,7 +162,7 @@ class Guidance():
 	# The main purpose is to check if a waypoint has been reached,
 	# and if so, send out the next waypoint to continue the mission
 	def check_waypoint_status(self, te):
-		#self.low_battery_landing()
+		self.low_battery_landing()
 		# If we're performing the ROI diversion, then don't do
 		# anything here, as this is handled in that function
 		if not (self.performing_roi or self.mission_completed or self.crit_bat_land_init):
@@ -181,9 +185,14 @@ class Guidance():
 					# Increment our waypoint counter
 					self.waypoint_counter += 1
 					# This will allow for target dection to be started NOT IMPLEMENTED YET
-					
+
+				elif (self.FoundAruco == True and self.roi_counter == 2): # land early if aruco location found & performed x2 roi checks
+					rospy.loginfo("Completed All Tasks! Initiate Landing Sequence")
+					# send landing
+					self.aruco_land()
+				
 				else: # land() will check for aruco
-					rospy.loginfo("Initiate Landing Sequence")
+					rospy.loginfo("Completed Waypoint List! Initiate Landing Sequence")
 					# send landing
 					self.aruco_land()
 
@@ -195,6 +204,7 @@ class Guidance():
 	# It is also responsible for handling the ROI "inspection task"
 	def callback_inspect_roi(self, msg_in):
 		rospy.loginfo("ROI Callback recieved/triggered")
+		self.roi_counter += 1 # incriment roi counter
 
 		# Set our flag that we are performing the diversion
 		self.performing_roi = True
@@ -371,7 +381,7 @@ class Guidance():
 		# return appended wps variable (as new waypoint list)
 		print(f"breadcrumb waypoints: {len(wps)}")
 		print(f"generated waypoints: {len(waypoints)}")
-		display_path(wps) # publishes total planned path to rviz
+		display_path(wps,"guidance/breadcrumb_list") # publishes total planned path to rviz
 		return wps
 
 	# This function will check if a list of waypoints is in the format we expect
@@ -475,7 +485,7 @@ def generate_waypoints(width,height,alt):
 		return new_waypoints
 
 	# Apply the function to remove middle waypoints
-	waypoints = remove_middle_if_aligned(waypoints)
+	#waypoints = remove_middle_if_aligned(waypoints)
 
 	#print(f"Waypoint List Generated: {waypoints}")
 	print(f"x positions: {x_points}")
@@ -495,13 +505,14 @@ def generate_waypoints(width,height,alt):
 
 	if within_bounds:
 		print("All waypoints are within bounds.")
+		display_path(waypoints,"guidance/waypoint_list")
 
 	return waypoints
 
-def display_path(wps):
-		rospy.loginfo("Displaying Path (from breadcrumb)")
+def display_path(wps,topic_name):
+		rospy.loginfo(f"Displaying Path for {topic_name}")
 		# Ensure the publisher is initialized
-		pub_path = rospy.Publisher("/guidance/path", Path, queue_size=10, latch=True)
+		pub_path = rospy.Publisher(topic_name, Path, queue_size=10, latch=True)
 		# Create the Path message
 		msg = Path()
 		msg.header.frame_id = "/map"
