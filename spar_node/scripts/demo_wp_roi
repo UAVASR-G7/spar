@@ -158,7 +158,7 @@ class Guidance():
 	# The main purpose is to check if a waypoint has been reached,
 	# and if so, send out the next waypoint to continue the mission
 	def check_waypoint_status(self, te):
-		#self.low_battery_landing()
+		self.low_battery_landing()
 		# If we're performing the ROI diversion, then don't do
 		# anything here, as this is handled in that function
 		if not (self.performing_roi or self.mission_completed or self.crit_bat_land_init):
