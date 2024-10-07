@@ -13,7 +13,7 @@ def publish_battery_state():
         battery_state = BatteryState()
 
         # Simulate a critical battery level
-        battery_state.voltage = 11.1  # Example voltage (V)
+        battery_state.voltage = 9  # Example voltage (V)
         battery_state.current = -0.5  # Example current (A)
         battery_state.charge = 10.0  # Example remaining charge (Ah)
         battery_state.capacity = 100.0  # Example full capacity (Ah)
