@@ -6,6 +6,7 @@ import rospy  # ROS Python client library
 import tf2_ros  # ROS library for handling coordinate transformations (TF2)
 from std_msgs.msg import Time  # Standard ROS message type for timestamps
 from geometry_msgs.msg import TransformStamped, PoseStamped  # ROS message types for transforms and poses
+from spar_msgs.msg import TargetLocalisation
 
 # Global variables
 tfBuffer = None  # Buffer to store and query transformations
@@ -31,6 +32,12 @@ def callback_target_found(msg_in):
         rospy.loginfo("[x: %0.2f; y: %0.2f; z: %0.2f]" % (t.transform.translation.x,
                                                             t.transform.translation.y,
                                                             t.transform.translation.z))
+        
+        # test
+        msg_out_localisation = TargetLocalisation()
+        msg_out_localisation.frame_x = t.transform.translation.x
+        msg_out_localisation.frame_y = t.transform.translation.y
+        target_pub_inf.publish(msg_out_localisation)
 
         # Create a PoseStamped message to represent the ROI
         # The pose will include the position (from the transform) and a default orientation (no rotation)
@@ -56,6 +63,9 @@ def callback_target_found(msg_in):
 if __name__ == '__main__':
     # Initialize the ROS node with the name 'tf2_listener'
     rospy.init_node('tf2_listener')
+
+    #
+    target_pub_inf = rospy.Publisher("target_detection/localisation", TargetLocalisation, queue_size=10)
 
     # Subscribe to the topic that publishes timestamps for "target found" events
     # When a new message (timestamp) is received, the callback_target_found function is triggered
