@@ -204,7 +204,6 @@ class Guidance():
 	# It is also responsible for handling the ROI "inspection task"
 	def callback_inspect_roi(self, msg_in):
 		rospy.loginfo("ROI Callback recieved/triggered")
-		self.roi_counter += 1 # incriment roi counter
 
 		# Set our flag that we are performing the diversion
 		self.performing_roi = True
@@ -244,6 +243,9 @@ class Guidance():
 		# "waypoint_counter" represents the "next waypoint"; "waypoint_counter - 1" represents the "current waypoint"
 		rospy.loginfo("Resuming flight plan from waypoint %i!" % (self.waypoint_counter - 1))
 		self.send_wp(self.waypoints[self.waypoint_counter - 1])
+
+		self.roi_counter += 1 # incriment roi counter (after the return waypoint was sent)
+		
 		# Unset our flag that we are performing a diversion to allow the waypoint timer to take back over
 		self.performing_roi = False
 
