@@ -2,7 +2,7 @@
 <launch>
 	<node name="guidance" pkg="spar_node" type="demo_wp_roi" respawn="false" output="screen">
 		<!-- Linear and yaw motion velocities -->
-		<param name="vel_linear" type="double" value="0.7" />
+		<param name="vel_linear" type="double" value="0.6" />
 		<param name="vel_yaw" type="double" value="0.2" />
 		<param name="vel_vert" type="double" value="0.35" />
 
@@ -14,8 +14,8 @@
 		<param name="action_topic" type="string" value="spar/flight" />
 
 		<!-- Remappings -->
-		<remap from="~/pose" to="uavasr/pose" />
-		<!--remap from="~/pose" to="mavros/local_position/pose" /-->
+		<!--remap from="~/pose" to="uavasr/pose" /-->
+		<remap from="~/pose" to="mavros/local_position/pose" />
 		<remap from="~/roi" to="target_detection/roi" />
 	</node>
 </launch>

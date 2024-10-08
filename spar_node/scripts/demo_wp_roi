@@ -134,7 +134,15 @@ class Guidance():
 			rospy.loginfo(f'Target [{msg_in.target_label}] Detected at x: {msg_in.frame_x}, y: {msg_in.frame_y}')
 			self.TargetLabel = msg_in
 			rospy.sleep(rospy.Duration(2))
-			display_target([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position")
+			if self.TargetLabel == 'person':
+				display_target([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_person")
+			elif self.TargetLabel == 'backpack':
+				display_target([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_backpack")
+			elif self.TargetLabel == 'drone':
+				display_target([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_drone")
+			elif self.TargetLabel == 'phone':
+				display_target([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_phone")
+
 
 	# This function will check receive the current pose of the UAV constantly
 	def callback_pose(self, msg_in):
@@ -142,7 +150,7 @@ class Guidance():
 		self.current_location = msg_in.pose.position
 
 	def low_battery_landing(self,timer=None):
-		if self.battery_vol <= 9.7 and not self.crit_bat_land_init:
+		if self.battery_vol <= 9.3 and not self.crit_bat_land_init:
 			self.crit_bat_land_init = True
 			print(f"Battery Voltage Critical!: {self.battery_vol}")
 			self.spar_client.cancel_goal()
@@ -165,43 +173,47 @@ class Guidance():
 	# The main purpose is to check if a waypoint has been reached,
 	# and if so, send out the next waypoint to continue the mission
 	def check_waypoint_status(self, te):
+		# Call the low battery landing check
 		self.low_battery_landing()
-		# If we're performing the ROI diversion, then don't do
-		# anything here, as this is handled in that function
+
+		# If we're performing the ROI diversion or if the mission is completed or the critical battery landing was initiated
 		if not (self.performing_roi or self.mission_completed or self.crit_bat_land_init):
-			# if last send_wp/action succeeded run this if loop 
+			
+			# Check if the goal (waypoint) was successfully reached
 			if self.spar_client.get_state() == GoalStatus.SUCCEEDED:
 				rospy.loginfo("Reached waypoint %i!" % (self.waypoint_counter))
-				# XXX:	Another check could go here to finish the mission early
-				#		if "all" inspection tasks have been completed
-				#		(Add in another "if" and make the waypoint counter check
-				#		 an "elif" check instead.
-				#		 i.e. if complete; elif more wps; else wps finished)
-				# only run this if loop if the spar_client is not waiting for a result
-				if self.waypoint_counter < (len(self.waypoints)):
-					# send generated waypoints to path_plan() for breadcrumb implementation
-					path_plan_wps = self.path_plan([self.waypoints[self.waypoint_counter-1],self.waypoints[self.waypoint_counter]])
-					# send path planned waypoints to send_wp()
+				
+				# Early landing condition: if ArUco marker is found and 2 ROI checks completed, initiate landing early
+				if self.FoundAruco and self.roi_counter == 2:
+					rospy.loginfo("Found ArUco marker and completed ROI checks. Initiating early landing.")
+					self.aruco_land()  # Early landing procedure
+					return  # Exit the function early to prevent further waypoint processing
+
+				# Normal mission continuation
+				elif self.waypoint_counter < len(self.waypoints):
+					# Generate path plan for next waypoint and send it
+					path_plan_wps = self.path_plan([self.waypoints[self.waypoint_counter - 1], self.waypoints[self.waypoint_counter]])
 					for planned_path in path_plan_wps:
 						self.send_wp(planned_path)
 
-					# Increment our waypoint counter
+					# Increment waypoint counter
 					self.waypoint_counter += 1
-					# This will allow for target dection to be started NOT IMPLEMENTED YET
 
-				elif (self.FoundAruco == True and self.roi_counter == 2): # land early if aruco location found & performed x2 roi checks
-					rospy.loginfo("Completed All Tasks! Initiate Landing Sequence")
-					# send landing
-					self.aruco_land()
-				
-				else: # land() will check for aruco
+				else:
+					# If all waypoints are completed, initiate normal landing sequence
 					rospy.loginfo("Completed Waypoint List! Initiate Landing Sequence")
-					# send landing
 					self.aruco_land()
 
-			elif (self.spar_client.get_state() == GoalStatus.PREEMPTED) or (self.spar_client.get_state() == GoalStatus.ABORTED) or (self.spar_client.get_state() == GoalStatus.REJECTED):
+			# Handle early landing condition separately if ArUco is found during ROI checks
+			elif self.FoundAruco and self.roi_counter == 2:
+				rospy.loginfo("Completed All Tasks! Initiate Early Landing Sequence")
+				self.aruco_land()
+
+			# Check for mission failures (aborted, preempted, or rejected states)
+			elif (self.spar_client.get_state() in [GoalStatus.PREEMPTED, GoalStatus.ABORTED, GoalStatus.REJECTED]):
 				rospy.loginfo("Mission cancelled!")
 				rospy.signal_shutdown("cancelled")
+
 
 	# This function will fire whenever a ROI pose message is sent
 	# It is also responsible for handling the ROI "inspection task"
@@ -438,7 +450,7 @@ def generate_waypoints(width,height,alt):
 	yaw = 0.0
 	waypoints = []
 	# Add takeoff waypoint (over origin of map)
-	waypoints.append([0, 0, alt, 0])
+	waypoints.append([-1, -1, alt, 0])
 	# Given width and height (cannot change these)
 	width = 8
 	height = 5
@@ -568,6 +580,9 @@ def display_target(target_position, topic_name):
     marker.color.g = 0.0  # Green
     marker.color.b = 0.0  # Blue
     marker.color.a = 1.0  # Alpha (1.0 means fully opaque)
+    
+    # set lifetime to 0, to marker remains in rviz
+    marker.lifetime = rospy.Duration(0)
     
     # Publish the marker message
     pub_marker.publish(marker)

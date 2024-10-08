@@ -13,7 +13,7 @@ tfbr = None  # Dynamic transform broadcaster (currently not used)
 tfsbr = None  # Static transform broadcaster
 
 # Frame names for UAV and camera
-uav_name = "emulated_uav"  # Name of the UAV's coordinate frame
+uav_name = "uavteam7"  # Name of the UAV's coordinate frame
 #uav_name = "uavteam7"
 camera_name = "camera"  # Name of the camera's coordinate frame
 
@@ -43,6 +43,7 @@ def send_tf_camera():
     # Define the rotation of the camera relative to the UAV using Euler angles (converted to a quaternion)
     # The camera is rotated to point downward with a 180-degree (pi radians) rotation around the Y-axis (pitch)
     q = tf_conversions.transformations.quaternion_from_euler(0, math.pi, 0)  # (roll, pitch, yaw)
+    # q = tf_conversions.transformations.quaternion_from_euler(0, 0, 0)  # (roll, pitch, yaw)
     
     # Apply the calculated quaternion to the transform message
     t.transform.rotation.x = q[0]

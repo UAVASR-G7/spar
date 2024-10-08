@@ -12,6 +12,8 @@ from spar_msgs.msg import TargetLocalisation
 tfBuffer = None  # Buffer to store and query transformations
 tfln = None  # TransformListener to listen for incoming transforms and populate the buffer
 pub_roi = None  # Publisher to send the Region of Interest (ROI) as a PoseStamped message
+target_id = -1
+target_label = "None"
 
 def callback_target_found(msg_in):
     """
@@ -35,6 +37,8 @@ def callback_target_found(msg_in):
         
         # test
         msg_out_localisation = TargetLocalisation()
+        msg_out_localisation.target_id = target_id
+        msg_out_localisation.target_label = target_label
         msg_out_localisation.frame_x = t.transform.translation.x
         msg_out_localisation.frame_y = t.transform.translation.y
         target_pub_inf.publish(msg_out_localisation)
@@ -60,12 +64,20 @@ def callback_target_found(msg_in):
     except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
         rospy.logwarn("Transform lookup failed: %s" % str(e))
 
+def target_info_callback(msg_in):
+    global target_id
+    global target_label
+    target_id = msg_in.target_id
+    target_label = msg_in.target_label
+    
+
 if __name__ == '__main__':
     # Initialize the ROS node with the name 'tf2_listener'
     rospy.init_node('tf2_listener')
 
     #
     target_pub_inf = rospy.Publisher("target_detection/localisation", TargetLocalisation, queue_size=10)
+    target_sub_inf = rospy.Subscriber("target_detection/localisation", TargetLocalisation, target_info_callback)
 
     # Subscribe to the topic that publishes timestamps for "target found" events
     # When a new message (timestamp) is received, the callback_target_found function is triggered
