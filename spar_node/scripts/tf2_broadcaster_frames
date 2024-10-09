@@ -13,7 +13,7 @@ tfbr = None  # Dynamic transform broadcaster (currently not used)
 tfsbr = None  # Static transform broadcaster
 
 # Frame names for UAV and camera
-uav_name = "uavteam7"  # Name of the UAV's coordinate frame
+uav_name = "emulated_uav"  # Name of the UAV's coordinate frame
 #uav_name = "uavteam7"
 camera_name = "camera"  # Name of the camera's coordinate frame
 
@@ -85,7 +85,7 @@ if __name__ == '__main__':
 
     # Uncomment the following line if you want to subscribe to a UAV pose topic
     # This would allow the node to receive real-time UAV position and orientation data
-    # rospy.Subscriber('/emulated_uav/pose', PoseStamped, callback_pose)
+    rospy.Subscriber('/emulated_uav/pose', PoseStamped, callback_pose)
 
     # Setup the static transform broadcaster
     # The static transform is constant and does not change over time
