@@ -24,6 +24,7 @@ from visualization_msgs.msg import Marker
 # within itself.
 # i.e. it will have it's own publishers, subscribers, etc., that
 # will call it's own functions as callbacks, etc.
+global flight_halt_flag
 global flight_height
 flight_height = 2.1
 
@@ -42,7 +43,7 @@ class Guidance():
 
 		# Internal counter to see what waypoint were are up to
 		self.waypoint_counter = 0
-		#self.reached_wp_1 = False 
+		#self.reached_wp_1 = False
 
 		# performing ROI flag
 		self.performing_roi = False
@@ -105,6 +106,8 @@ class Guidance():
 			self.sub_aruco = rospy.Subscriber('/processed_aruco/localisation', ArucoLocalisation, self.callback_aruco_marker)
 			# Target Detection Subscriber (recieve target location from ITA)
 			self.sub_target = rospy.Subscriber('target_detection/localisation', TargetLocalisation, self.callback_target)
+			# Target Detection Subscriber (to stop flight motion for detection purposes)
+			self.sub_detection_flag  = rospy.Subscriber('target_detection/stop', Bool, self.callback_halt)
 
 			#### publishers ####
 			# Publisher for GCS VOCAL
@@ -113,6 +116,8 @@ class Guidance():
 			#self.pub_target_label = rospy.Publisher('payload/target', TargetLocalisation, queue_size=10)
 			# Inside your class or node initialization
 			self.pub_roi_status = rospy.Publisher('/roi_status_flag', Bool, queue_size=10)
+			# Target Detection publisher (to initiate ITA detection)
+			self.pub_detection_status = rospy.Publisher('/target_detection/stop', Bool, queue_size=10)
 
 			# If shutdown is issued (eg. CTRL+C), cancel current mission before rospy is shutdown.
 			rospy.on_shutdown(lambda : self.shutdown())
@@ -129,29 +134,30 @@ class Guidance():
 		display_target([msg_in.frame_x, msg_in.frame_y, 0, 0],"guidance/aruco_position")
 
 	def callback_target(self, msg_in):
-		# Is this meant to display it after roi or before?
-		# if not self.performing_roi:  # This prevents it from diplaying the markers at all
-		rospy.loginfo(f'UAV Location at x: {self.current_location.x}, y: {self.current_location.y}, z: {self.current_location.z}')
-		rospy.loginfo(f'Target [{msg_in.target_label}] Detected at x: {msg_in.frame_x}, y: {msg_in.frame_y}')
-		# rospy.sleep(rospy.Duration(2))
-		if msg_in.target_label == 'person':
-			rospy.loginfo(f'Display {msg_in.target_label}')
-			display_target([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_person")
-		elif msg_in.target_label == 'backpack':
-			rospy.loginfo(f'Display {msg_in.target_label}')
-			display_target([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_backpack")
-		elif msg_in.target_label == 'drone':
-			display_target([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_drone")
-			rospy.loginfo(f'Display {msg_in.target_label}')
-		elif msg_in.target_label == 'phone':
-			display_target([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_phone")
-			rospy.loginfo(f'Display {msg_in.target_label}')
-
+		if not self.performing_roi:
+			rospy.loginfo(f'UAV Location at x: {self.current_location.x}, y: {self.current_location.y}, z: {self.current_location.z}')
+			rospy.loginfo(f'Target [{msg_in.target_label}] Detected at x: {msg_in.frame_x}, y: {msg_in.frame_y}')
+			self.TargetLabel = msg_in
+			rospy.sleep(rospy.Duration(2))
+			if self.TargetLabel == 'person':
+				display_target([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_person")
+			elif self.TargetLabel == 'backpack':
+				display_target([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_backpack")
+			elif self.TargetLabel == 'drone':
+				display_target([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_drone")
+			elif self.TargetLabel == 'phone':
+				display_target([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_phone")
 
 	# This function will check receive the current pose of the UAV constantly
 	def callback_pose(self, msg_in):
 		#rospy.loginfo("Pose Callback recieved/Triggered")
 		self.current_location = msg_in.pose.position
+
+	# This function sets the global varable, which is references within the check_waypoint_status() callback 
+	def callback_halt(self,msg_in):
+		global flight_halt_flag
+		if msg_in.data == True:
+			flight_halt_flag = True
 
 	def low_battery_landing(self,timer=None):
 		if self.battery_vol <= 9.3 and not self.crit_bat_land_init:
@@ -170,8 +176,22 @@ class Guidance():
 			if result == GoalStatus.SUCCEEDED:
 				rospy.loginfo("Landing complete!")
 				self.mission_completed = True
+
 			else:
 				rospy.logerr("Landing failed!")
+
+	def flight_half(self):
+		self.spar_client.cancel_goal()
+		goal = FlightMotionGoal()
+		goal.motion = FlightMotionGoal.MOTION_STOP
+		self.spar_client.send_goal(goal)
+		self.spar_client.wait_for_result()
+		result = self.spar_client.get_result()
+		if result == GoalStatus.spar_client.get_state():
+			rospy.loginfo("Flight motion stopped successfully.")
+			self.pub_detection_status.publish(Bool(data=False)) # here false indicates a successful stop (to initialise ITA detection)
+		else:
+			rospy.logerr("Failed to stop flight motion.")
 
 	# This function will fire whenever we recieve a timer event (te) from rospy.Timer()
 	# The main purpose is to check if a waypoint has been reached,
@@ -182,7 +202,12 @@ class Guidance():
 
 		# If we're performing the ROI diversion or if the mission is completed or the critical battery landing was initiated
 		if not (self.performing_roi or self.mission_completed or self.crit_bat_land_init):
-			
+
+			if flight_halt_flag == True: 
+				global flight_halt_flag
+				self.flight_half()
+				rospy.loginfo(f"Initiate Flight Halt! Flight_halt_flag set to : {flight_halt_flag}")
+
 			# Check if the goal (waypoint) was successfully reached
 			if self.spar_client.get_state() == GoalStatus.SUCCEEDED:
 				rospy.loginfo("Reached waypoint %i!" % (self.waypoint_counter))
