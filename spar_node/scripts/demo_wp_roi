@@ -184,6 +184,29 @@ class Guidance():
 			else:
 				rospy.logerr("Landing failed!")
 
+	#####
+	def flight_halt(self):
+		self.performing_roi = True # tell check_waypoint_status to stop checking goal status during flight halt & during roi inspection
+		self.spar_client.cancel_goal()
+		goal = FlightMotionGoal()
+		goal.motion = FlightMotionGoal.MOTION_STOP
+		goal.velocity_vertical = 0.01
+		goal.wait_for_convergence = True
+		goal.position_radius = rospy.get_param("~position_radius", 0.15)  # Not applicable since we're stopping
+		goal.yaw_range = rospy.get_param("~yaw_range", 0.1)  # Not applicable either
+		goal.position.x = self.current_location.x
+		goal.position.y = self.current_location.y
+		goal.position.z = self.current_location.z
+		self.spar_client.send_goal(goal)
+		self.spar_client.wait_for_result()
+		result = self.spar_client.get_state()
+		rospy.sleep(10)
+		if result == GoalStatus.SUCCEEDED:
+			rospy.loginfo("Flight motion stopped successfully.")
+			self.pub_detection_status.publish(Bool(data=False)) # here false indicates a successful stop (to initialise ITA detection)
+			self.performing_roi = False # start checking waypoint goal status again
+		else:
+			rospy.logerr("Failed to stop flight motion.")
 
 	# This function will fire whenever we recieve a timer event (te) from rospy.Timer()
 	# The main purpose is to check if a waypoint has been reached,
