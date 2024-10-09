@@ -129,19 +129,23 @@ class Guidance():
 		display_target([msg_in.frame_x, msg_in.frame_y, 0, 0],"guidance/aruco_position")
 
 	def callback_target(self, msg_in):
-		if not self.performing_roi:
-			rospy.loginfo(f'UAV Location at x: {self.current_location.x}, y: {self.current_location.y}, z: {self.current_location.z}')
-			rospy.loginfo(f'Target [{msg_in.target_label}] Detected at x: {msg_in.frame_x}, y: {msg_in.frame_y}')
-			self.TargetLabel = msg_in
-			rospy.sleep(rospy.Duration(2))
-			if self.TargetLabel == 'person':
-				display_target([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_person")
-			elif self.TargetLabel == 'backpack':
-				display_target([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_backpack")
-			elif self.TargetLabel == 'drone':
-				display_target([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_drone")
-			elif self.TargetLabel == 'phone':
-				display_target([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_phone")
+		# if not self.performing_roi:
+		rospy.loginfo(f'UAV Location at x: {self.current_location.x}, y: {self.current_location.y}, z: {self.current_location.z}')
+		rospy.loginfo(f'Target [{msg_in.target_label}] Detected at x: {msg_in.frame_x}, y: {msg_in.frame_y}')
+		# self.TargetLabel = msg_in
+		# rospy.sleep(rospy.Duration(2))
+		if msg_in.target_label == 'person':
+			display_target([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_person")
+			rospy.loginfo(f'Displayed {msg_in.target_label}')
+		elif msg_in.target_label == 'backpack':
+			display_target([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_backpack")
+			rospy.loginfo(f'Displayed {msg_in.target_label}')
+		elif msg_in.target_label == 'drone':
+			display_target([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_drone")
+			rospy.loginfo(f'Displayed {msg_in.target_label}')
+		elif msg_in.target_label == 'phone':
+			display_target([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_phone")
+			rospy.loginfo(f'Displayed {msg_in.target_label}')
 
 
 	# This function will check receive the current pose of the UAV constantly
