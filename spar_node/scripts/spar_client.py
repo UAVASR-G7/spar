@@ -2,21 +2,24 @@
 
 import rospy
 import actionlib
-from movebasemsgs.msg import MoveBaseAction
-from actionlibmsgs.msg import GoalStatus
+from actionlib_msgs.msg import GoalStatus
+from spar_msgs.msg import FlightMotionAction, FlightMotionGoal, ArucoLocalisation, TargetLocalisation 
 
 class SparClientMonitor:
-    def init(self):
-        rospy.initnode('spar_client_monitor', anonymous=True)
+    def __init__(self):
+        rospy.init_node('spar_client_monitor', anonymous=True)
 
-        # Initialize the action client
-        self.spar_client = actionlib.SimpleActionClient('/move_base', MoveBaseAction)
-        rospy.loginfo("Waiting for /move_base action server to start...")
+        # Get the action server namespace from parameters or use the default
+        action_ns = rospy.get_param("~action_topic", 'spar/flight')
+
+        # Initialize the action client with the retrieved namespace
+        self.spar_client = actionlib.SimpleActionClient(action_ns, FlightMotionAction)
+        rospy.loginfo(f"Waiting for {action_ns} action server to start...")
         self.spar_client.wait_for_server()
-        rospy.loginfo("/move_base action server started.")
+        rospy.loginfo(f"{action_ns} action server started.")
 
     def print_state(self):
-        # Loop to constantly print the state of the spar_client
+        # Continuously print the state of the action client
         rate = rospy.Rate(1)  # 1 Hz rate
         while not rospy.is_shutdown():
             state = self.spar_client.get_state()
@@ -26,31 +29,23 @@ class SparClientMonitor:
 
     @staticmethod
     def get_state_string(state):
-        # Convert the state code to a readable string
-        if state == GoalStatus.PENDING:
-            return "PENDING"
-        elif state == GoalStatus.ACTIVE:
-            return "ACTIVE"
-        elif state == GoalStatus.PREEMPTED:
-            return "PREEMPTED"
-        elif state == GoalStatus.SUCCEEDED:
-            return "SUCCEEDED"
-        elif state == GoalStatus.ABORTED:
-            return "ABORTED"
-        elif state == GoalStatus.REJECTED:
-            return "REJECTED"
-        elif state == GoalStatus.PREEMPTING:
-            return "PREEMPTING"
-        elif state == GoalStatus.RECALLING:
-            return "RECALLING"
-        elif state == GoalStatus.RECALLED:
-            return "RECALLED"
-        elif state == GoalStatus.LOST:
-            return "LOST"
-        else:
-            return "UNKNOWN"
+        # Convert the state code to a readable string using a dictionary for state mappings
+        state_mappings = {
+            GoalStatus.PENDING: "PENDING",
+            GoalStatus.ACTIVE: "ACTIVE",
+            GoalStatus.PREEMPTED: "PREEMPTED",
+            GoalStatus.SUCCEEDED: "SUCCEEDED",
+            GoalStatus.ABORTED: "ABORTED",
+            GoalStatus.REJECTED: "REJECTED",
+            GoalStatus.PREEMPTING: "PREEMPTING",
+            GoalStatus.RECALLING: "RECALLING",
+            GoalStatus.RECALLED: "RECALLED",
+            GoalStatus.LOST: "LOST",
+            -1: "UNKNOWN"
+        }
+        return state_mappings.get(state, "UNKNOWN")
 
-if __name == '__main':
+if __name__ == '__main__':
     try:
         monitor = SparClientMonitor()
         monitor.print_state()
