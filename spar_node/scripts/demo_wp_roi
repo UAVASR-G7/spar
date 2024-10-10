@@ -226,10 +226,12 @@ class Guidance():
 			self.spar_client.send_goal(goal)
 			self.spar_client.wait_for_result()
 			result = self.spar_client.get_state()
-			rospy.sleep(10) # pause for 10sec 
+			rospy.sleep(4) # time for UAV to completely stop
+			self.pub_detection_status.publish(Bool(data=False)) # here false indicates a successful stop (to initialise ITA detection)
+			rospy.loginfo("UAV stopped & Detection flag published for ITA")
+			rospy.sleep(4) # time for ITA to detect and calculate position
 			if result == GoalStatus.SUCCEEDED:
 				rospy.loginfo("Flight motion stopped successfully.")
-				self.pub_detection_status.publish(Bool(data=False)) # here false indicates a successful stop (to initialise ITA detection)
 				self.performing_halt = False # start checking waypoint goal status again
 			else:
 				rospy.logerr("Failed to stop flight motion.")
