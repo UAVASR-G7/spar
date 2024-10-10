@@ -237,6 +237,7 @@ class Guidance():
 				rospy.logerr("Failed to stop flight motion.")
 			rospy.loginfo("Resuming flight plan from waypoint %i!" % (self.waypoint_counter - 1))
 			self.send_wp(self.waypoints[self.waypoint_counter - 1])
+			self.pub_detection_status.publish(Bool(data=False))
 
 	# This function will fire whenever a ROI pose message is sent
 	# It is also responsible for handling the ROI "inspection task"
