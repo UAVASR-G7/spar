@@ -13,8 +13,8 @@ tfbr = None  # Dynamic transform broadcaster (currently not used)
 tfsbr = None  # Static transform broadcaster
 
 # Frame names for UAV and camera
-uav_name = "emulated_uav"  # Name of the UAV's coordinate frame
-#uav_name = "uavteam7"
+# uav_name = "emulated_uav"  # Name of the UAV's coordinate frame
+uav_name = "uavteam7"
 camera_name = "camera"  # Name of the camera's coordinate frame
 
 def send_tf_camera():
