@@ -27,7 +27,7 @@ from visualization_msgs.msg import Marker
 # global flight_halt_flag
 
 global flight_height
-flight_height = 2.1
+flight_height = 2.25
 
 class Guidance():
 	def __init__(self, waypoints):
@@ -518,67 +518,26 @@ class Guidance():
 		rospy.loginfo("Guidance stopped")
 
 def generate_waypoints(width,height,alt):
-	# Set altitude & YAW
-	yaw = 0.0
-	waypoints = []
-	# Add takeoff waypoint (over origin of map)
-	waypoints.append([-1, -1, alt, 0])
-	# Given width and height (cannot change these)
-	width = 8
-	height = 5
-	# Density paramater
-	dn = 1.4
-	# edge offsets
-	x_edge_offset=0.5
-	y_edge_offset=0.3
-
-	# Calculate spacings based on the defined edge offsets
-	available_x_space = width - dn * x_edge_offset
-	available_y_space = height - dn * y_edge_offset
-	# Calculate spacing to ensure symmetry
-	x_spacing = available_x_space / (int(available_x_space) // dn)
-	y_spacing = available_y_space / (int(available_y_space) // dn)
-	# Adjust the grid to have the origin in the center and stay within bounds
-	x_points = np.arange(-width/2 + x_edge_offset, width/2 - x_edge_offset + x_spacing, x_spacing)
-	y_points = np.arange(-height/2 + y_edge_offset, height/2 - y_edge_offset + y_spacing, y_spacing)
-	# Generate y_points from -2.4 to 2.25 (inverted range) "to have narrow side not close to net"
-	#y_points = np.arange(-height/2 + y_edge_offset, height/2 - y_edge_offset + y_spacing, y_spacing)[::-1]
-
-	# Traverse the area in a straight line along the x-axis (long axis)
-	for x in x_points:
-		for y in y_points:
-			waypoints.append([x, y, alt, yaw])  # Initialize with z=0.0 and yaw=0.0
-		y_points = y_points[::-1]  # Reverse y_points to keep a straight line in x direction
-
-	# Add pre-landing waypoint (origin of map)
-	#waypoints.append([0, 0, alt, 0])
-
-	# Remove the middle waypoint if three consecutive waypoints are aligned
-	def remove_middle_if_aligned(waypoints):
-		new_waypoints = []
-		i = 0
-		while i < len(waypoints):
-			if i > 0 and i < len(waypoints) - 1:
-				prev_wp = waypoints[i - 1]
-				curr_wp = waypoints[i]
-				next_wp = waypoints[i + 1]
-				
-				# Check if the current waypoint is in a row (aligned on either axis)
-				if (prev_wp[0] == curr_wp[0] == next_wp[0]) or (prev_wp[1] == curr_wp[1] == next_wp[1]):
-					# Skip the current waypoint (remove it)
-					i += 1
-					continue
-
-			new_waypoints.append(waypoints[i])
-			i += 1
-		return new_waypoints
-
-	# Apply the function to remove middle waypoints
-	waypoints = remove_middle_if_aligned(waypoints)
+	# 7 passes
+	waypoints = [[-1, -1, alt, 0], 
+	[-3.7, -2.3, alt, 0.0], 
+	[-3.7, 2.2, alt, 0.0], 
+	[-2.458, 2.2, alt, 0.0], 
+	[-2.458, -2.3, alt, 0.0], 
+	[-1.21, -2.3, alt, 0.0], 
+	[-1.21, 2.2, alt, 0.0], 
+	[0.025, 2.2, alt, 0.0], 
+	[0.0251, -2.3, alt, 0.0], 
+	[1.266, -2.3, alt, 0.0], 
+	[1.266, 2.2, alt, 0.0], 
+	[2.50, 2.2, alt, 0.0], 
+	[2.504, -2.3, alt, 0.0], 
+	[3.75, -2.3, alt, 0.0], 
+	[3.75, 2.2, alt, 0.0]]
 
 	#print(f"Waypoint List Generated: {waypoints}")
-	print(f"x positions: {x_points}")
-	print(f"y positions: {y_points}")
+	#print(f"x positions: {x_points}")
+	#print(f"y positions: {y_points}")
 	print(f"altitude: {alt}")
 
 	# Check all generated waypoints are within bounds (height, width & alt)
