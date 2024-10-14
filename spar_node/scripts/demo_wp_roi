@@ -381,7 +381,7 @@ class Guidance():
 				landing_location = self.landing_wp  # Coordinates of detected ArUco marker (@ current altitude)
 			else:  # Land at the origin
 				rospy.loginfo("No ArUco marker detected. Landing at origin.")
-				landing_location = [0, 0, flight_height, 0]  # Origin coordinates
+				landing_location = [-1, -1, flight_height, 0]  # Origin coordinates
 			
 			# Plan the path from current location to the landing location (@ current altitude)
 			self.landing_path = self.path_plan([starting_location, landing_location])
