@@ -114,6 +114,9 @@ class Guidance():
 			# Inside your class or node initialization
 			self.pub_roi_status = rospy.Publisher('/roi_status_flag', Bool, queue_size=10)
 
+			#### Publisher to tell image system that the uav is stopping
+			self.pub_aruco_location = rospy.Publisher('/processed_aruco/location', Bool, queue_size=10)
+
 			# If shutdown is issued (eg. CTRL+C), cancel current mission before rospy is shutdown.
 			rospy.on_shutdown(lambda : self.shutdown())
 
@@ -341,6 +344,23 @@ class Guidance():
 			# Send the UAV to the landing waypoints (@ current altitude)
 			for landing_path in self.landing_path:
 				self.send_wp(landing_path)
+
+			# cancel previous goal set by send_wp()
+			self.spar_client.cancel_goal()
+			
+
+			##### NEW
+			if self.FoundAruco:
+				rospy.sleep(1) # wait for it to completely stop
+				# Allows it to follow the location while going down by 0.5
+				self.pub_aruco_location.publish(Bool(data=True)) # Tell the ITA to start detection
+				rospy.sleep(2)
+				self.send_wp([self.landing_wp[0], self.landing_wp[1], 1, self.landing_wp[3]]) # Go down to 1.6 along the right location
+				self.pub_aruco_location.publish(Bool(data=False)) # Necessary to reset for the next step
+				rospy.sleep(2) # Wait for it update location # Change to higher number like 5
+			#####
+
+
 			# cancel previous goal set by send_wp()
 			self.spar_client.cancel_goal()
 			# Create the goal object for landing
