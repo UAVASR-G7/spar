@@ -90,6 +90,8 @@ rosrun spar_node demo_wp_roi
 
 By meticulously following the detailed installation and configuration procedures, the Raspberry Pi is appropriately configured to send serial data to the autopilot. This thorough setup process ensures that the system is ready for autonomous flight, with all necessary components properly synchronized and operational.
 
-Now to update the nvagivation scritps to this repository, simply navigate to the spar workspace and clone this respoitory using git clone "https:....."
+Now to update the nvagivation scritps to this repository, simply navigate to the spar workspace and clone this respoitory (which is forked from the main qutas repository) use git clone "(https://github.com/UAVASR-G7/spar.git)". 
+
+Lastly, navigate to the catkin_ws location and run the execution catkin_make to rebuild the work-space. 
 
 
