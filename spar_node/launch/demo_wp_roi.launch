@@ -7,15 +7,15 @@
 		<param name="vel_vert" type="double" value="0.35" />
 
 		<!-- Position and yaw waypoint accuracies -->
-		<param name="acc_pos" type="double" value="0.15" />
+		<param name="acc_pos" type="double" value="0.1" />
 		<param name="acc_yaw" type="double" value="0.15" />
 
 		<!-- Spar parameters -->
 		<param name="action_topic" type="string" value="spar/flight" />
 
 		<!-- Remappings -->
-		<!--remap from="~/pose" to="uavasr/pose" /-->
-		<remap from="~/pose" to="mavros/local_position/pose" />
+		<remap from="~/pose" to="uavasr/pose" />
+		<!-- <remap from="~/pose" to="mavros/local_position/pose" /> -->
 		<remap from="~/roi" to="target_detection/roi" />
 	</node>
 </launch>
