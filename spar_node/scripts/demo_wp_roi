@@ -282,29 +282,14 @@ class Guidance():
 		rospy.loginfo("Reached diversion ROI!")
 		rospy.sleep(5)
 
-		#####
-		# self.pub_target_location.publish(Bool(data=True))
-		# rospy.sleep(5)
-		# target_location = [self.TargetLabel.frame_x, self.TargetLabel.frame_y, 0.5, 0.0]
-		# self.send_wp(target_location)
-		# self.pub_target_location.publish(Bool(data=False))
-		######
-
-		####################### 
+		####################### haulting functionality
 		self.pub_target_location.publish(Bool(data=True)) # Tell the ITA to start detection
-		rospy.sleep(1) # wait for the data to update
-		target_location = [self.TargetLabel.frame_x, self.TargetLabel.frame_y, 1.5, 0.0] # Detect the new location then go down to 1.5
+		rospy.sleep(2) # wait for the data to update
+		target_location = [self.TargetLabel.frame_x, self.TargetLabel.frame_y, 0.5, 0.0] # Detect the new location then go down to 1.5
 		self.send_wp(target_location)
 		self.pub_target_location.publish(Bool(data=False)) # Reset so that when trigger it start detection for new location
-		rospy.sleep(1.5) # Change to higher number like 5
-	
-		self.pub_target_location.publish(Bool(data=True)) # Tell the ITA to start detection
-		rospy.sleep(1) # wait for the data to update
-		target_location = [self.TargetLabel.frame_x, self.TargetLabel.frame_y, 0.5, 0.0] # Detect the new location then go down to 0.5
-		self.send_wp(target_location) 
-		rospy.sleep(1.5) # Change to higher number like 5
-		self.pub_target_location.publish(Bool(data=False)) # Reset so that when trigger it start detection for new location
-		######
+		rospy.sleep(1) # Change to higher number like 5
+		######################
 
 		# To publish the flag as True (to initiate payload drop)
 		rospy.loginfo("Payload roi_status_flag set to True!")
