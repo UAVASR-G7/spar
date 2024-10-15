@@ -129,7 +129,8 @@ class Guidance():
 		self.FoundAruco = True
 		self.landing_wp = [msg_in.frame_x, msg_in.frame_y, flight_height, 0] # Store the location
 		rospy.loginfo(f'Received Aruco land location. ID: {msg_in.aruco_id} Detected at x: {msg_in.frame_x}, y: {msg_in.frame_y}')
-		display_target([msg_in.frame_x, msg_in.frame_y, 0, 0],"guidance/aruco_position")
+		display_target_marker([msg_in.frame_x, msg_in.frame_y, 0, 0])
+		display_target_name([msg_in.frame_x, msg_in.frame_y, 0, 0],"Aruco")
 
 	def callback_target(self, msg_in):
 		# if not self.performing_roi:
@@ -588,12 +589,12 @@ def display_target_marker(target_position):
     # Publish the sphere marker to the /visualization_marker topic
     pub_marker.publish(marker)
 
-
 # Function to display the target name (text marker)
-def display_target_name(target_position, topic_name):
-    rospy.loginfo(f"Displaying target name on topic {topic_name}")
-    # Ensure the publisher is initialized
-    pub_marker = rospy.Publisher(topic_name, Marker, queue_size=10, latch=True)
+def display_target_name(target_position, target_name):
+    rospy.loginfo(f"Displaying target name for {target_name}")
+    
+    # Ensure the publisher is initialized with a specific topic (e.g., /visualization_marker)
+    pub_marker = rospy.Publisher('/visualization_marker', Marker, queue_size=10, latch=True)
     
     # Create the Marker message for the text (name)
     text_marker = Marker()
@@ -622,17 +623,19 @@ def display_target_name(target_position, topic_name):
     text_marker.color.b = 0.0
     text_marker.color.a = 1.0  # Fully opaque text
     
-    # Set the text based on the topic name
-    if topic_name == "Person":
+    # Set the text based on the target name
+    if target_name == "Person":
         text_marker.text = "Target Person"
-    elif topic_name == "Backpack":
+    elif target_name == "Backpack":
         text_marker.text = "Target Backpack"
-    elif topic_name == "Drone":
+    elif target_name == "Drone":
         text_marker.text = "Target Drone"
-    elif topic_name == "Phone":
+    elif target_name == "Phone":
         text_marker.text = "Target Phone"
+    elif target_name == "Aruco":
+        text_marker.text = "Landing Aruco Location"
     else:
-        text_marker.text = topic_name  # Default to the topic name if no match
+        text_marker.text = target_name  # Default to the topic name if no match
 
     # Set lifetime to 0 so the text remains visible in RViz
     text_marker.lifetime = rospy.Duration(0)
