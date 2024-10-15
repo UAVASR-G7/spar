@@ -592,9 +592,6 @@ def display_target_marker(target_position,target_name_str):
     # Publish the sphere marker to the /visualization_marker topic
     pub_marker.publish(marker)
 
-import rospy
-from visualization_msgs.msg import Marker
-
 # Function to display the target name (text marker)
 def display_target_name(target_position, target_name):
     rospy.loginfo(f"Displaying target name for {target_name}")
