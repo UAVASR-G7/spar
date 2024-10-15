@@ -14,8 +14,8 @@
 		<param name="action_topic" type="string" value="spar/flight" />
 
 		<!-- Remappings -->
-		<remap from="~/pose" to="uavasr/pose" />
-		<!-- <remap from="~/pose" to="mavros/local_position/pose" /> -->
+		<!-- <remap from="~/pose" to="uavasr/pose" /> -->
+		<remap from="~/pose" to="mavros/local_position/pose" />
 		<remap from="~/roi" to="target_detection/roi" />
 	</node>
 </launch>
