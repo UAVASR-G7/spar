@@ -114,6 +114,9 @@ class Guidance():
 			# Inside your class or node initialization
 			self.pub_roi_status = rospy.Publisher('/roi_status_flag', Bool, queue_size=10)
 
+			# marker publisher
+			pub_marker = rospy.Publisher('/visualization_marker', Marker, queue_size=10, latch=True)
+
 			#### Publisher to tell image system that the uav is stopping
 			self.pub_aruco_location = rospy.Publisher('/processed_aruco/location', Bool, queue_size=10)
 
@@ -129,7 +132,7 @@ class Guidance():
 		self.FoundAruco = True
 		self.landing_wp = [msg_in.frame_x, msg_in.frame_y, flight_height, 0] # Store the location
 		rospy.loginfo(f'Received Aruco land location. ID: {msg_in.aruco_id} Detected at x: {msg_in.frame_x}, y: {msg_in.frame_y}')
-		display_target_marker([msg_in.frame_x, msg_in.frame_y, 0, 0])
+		display_target_marker([msg_in.frame_x, msg_in.frame_y, 0, 0],"Aruco")
 		display_target_name([msg_in.frame_x, msg_in.frame_y, 0, 0],"Aruco")
 
 	def callback_target(self, msg_in):
@@ -139,19 +142,19 @@ class Guidance():
 		# self.TargetLabel = msg_in
 		# rospy.sleep(rospy.Duration(2))
 		if msg_in.target_label == 'person':
-			display_target_marker([msg_in.frame_x,msg_in.frame_y,0,0])
+			display_target_marker([msg_in.frame_x,msg_in.frame_y,0,0],"Person")
 			display_target_name([msg_in.frame_x,msg_in.frame_y,0,0],"Person")
 			rospy.loginfo(f'Displayed {msg_in.target_label}')
 		elif msg_in.target_label == 'backpack':
-			display_target_marker([msg_in.frame_x,msg_in.frame_y,0,0])
+			display_target_marker([msg_in.frame_x,msg_in.frame_y,0,0],"Backpack")
 			display_target_name([msg_in.frame_x,msg_in.frame_y,0,0],"Backpack")
 			rospy.loginfo(f'Displayed {msg_in.target_label}')
 		elif msg_in.target_label == 'drone':
-			display_target_marker([msg_in.frame_x,msg_in.frame_y,0,0])
+			display_target_marker([msg_in.frame_x,msg_in.frame_y,0,0],"Drone")
 			display_target_name([msg_in.frame_x,msg_in.frame_y,0,0],"Drone")
 			rospy.loginfo(f'Displayed {msg_in.target_label}')
 		elif msg_in.target_label == 'phone':
-			display_target_marker([msg_in.frame_x,msg_in.frame_y,0,0])
+			display_target_marker([msg_in.frame_x,msg_in.frame_y,0,0],"Phone")
 			display_target_name([msg_in.frame_x,msg_in.frame_y,0,0],"Phone")
 			rospy.loginfo(f'Displayed {msg_in.target_label}')
 
@@ -546,7 +549,7 @@ def display_path(wps,topic_name):
 		pub_path.publish(msg)
 
 # Function to display the target marker (sphere)
-def display_target_marker(target_position):
+def display_target_marker(target_position,target_name_str):
     rospy.loginfo(f"Displaying target marker on /visualization_marker")
     
     # Ensure the publisher is initialized with the /visualization_marker topic
@@ -556,7 +559,7 @@ def display_target_marker(target_position):
     marker = Marker()
     marker.header.frame_id = "map"  # Adjust frame according to your setup
     marker.header.stamp = rospy.Time.now()
-    marker.ns = "target_marker"  # Namespace for the marker
+    marker.ns = target_name_str   # Namespace for the marker
     marker.id = 0  # Unique ID for the sphere marker
     marker.type = Marker.SPHERE
     marker.action = Marker.ADD
@@ -589,6 +592,9 @@ def display_target_marker(target_position):
     # Publish the sphere marker to the /visualization_marker topic
     pub_marker.publish(marker)
 
+import rospy
+from visualization_msgs.msg import Marker
+
 # Function to display the target name (text marker)
 def display_target_name(target_position, target_name):
     rospy.loginfo(f"Displaying target name for {target_name}")
@@ -600,8 +606,7 @@ def display_target_name(target_position, target_name):
     text_marker = Marker()
     text_marker.header.frame_id = "map"
     text_marker.header.stamp = rospy.Time.now()
-    text_marker.ns = "target_name"  # Namespace for the text marker
-    text_marker.id = 1  # Unique ID for the text marker
+    text_marker.ns = target_name  # Namespace for the text marker (can be customized)
     text_marker.type = Marker.TEXT_VIEW_FACING
     text_marker.action = Marker.ADD
     
@@ -622,20 +627,26 @@ def display_target_name(target_position, target_name):
     text_marker.color.g = 1.0
     text_marker.color.b = 0.0
     text_marker.color.a = 1.0  # Fully opaque text
-    
+
     # Set the text based on the target name
     if target_name == "Person":
         text_marker.text = "Target Person"
+        text_marker.id = 1  # Unique ID for the text marker
     elif target_name == "Backpack":
         text_marker.text = "Target Backpack"
+        text_marker.id = 2  # Unique ID for the text marker
     elif target_name == "Drone":
         text_marker.text = "Target Drone"
+        text_marker.id = 3  # Unique ID for the text marker
     elif target_name == "Phone":
         text_marker.text = "Target Phone"
+        text_marker.id = 4  # Unique ID for the text marker
     elif target_name == "Aruco":
         text_marker.text = "Landing Aruco Location"
+        text_marker.id = 5  # Unique ID for the text marker
     else:
         text_marker.text = target_name  # Default to the topic name if no match
+        text_marker.id = 6  # Assign a default unique ID
 
     # Set lifetime to 0 so the text remains visible in RViz
     text_marker.lifetime = rospy.Duration(0)
