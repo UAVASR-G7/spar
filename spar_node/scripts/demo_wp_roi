@@ -138,20 +138,20 @@ class Guidance():
 		# self.TargetLabel = msg_in
 		# rospy.sleep(rospy.Duration(2))
 		if msg_in.target_label == 'person':
-			display_target_marker([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_person")
-			display_target_name([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_person")
+			display_target_marker([msg_in.frame_x,msg_in.frame_y,0,0])
+			display_target_name([msg_in.frame_x,msg_in.frame_y,0,0],"Person")
 			rospy.loginfo(f'Displayed {msg_in.target_label}')
 		elif msg_in.target_label == 'backpack':
-			display_target_marker([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_backpack")
-			display_target_name([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_backpack")
+			display_target_marker([msg_in.frame_x,msg_in.frame_y,0,0])
+			display_target_name([msg_in.frame_x,msg_in.frame_y,0,0],"Backpack")
 			rospy.loginfo(f'Displayed {msg_in.target_label}')
 		elif msg_in.target_label == 'drone':
-			display_target_marker([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_drone")
-			display_target_name([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_drone")
+			display_target_marker([msg_in.frame_x,msg_in.frame_y,0,0])
+			display_target_name([msg_in.frame_x,msg_in.frame_y,0,0],"Drone")
 			rospy.loginfo(f'Displayed {msg_in.target_label}')
 		elif msg_in.target_label == 'phone':
-			display_target_marker([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_phone")
-			display_target_name([msg_in.frame_x,msg_in.frame_y,0,0],"guidance/target_position_phone")
+			display_target_marker([msg_in.frame_x,msg_in.frame_y,0,0])
+			display_target_name([msg_in.frame_x,msg_in.frame_y,0,0],"Phone")
 			rospy.loginfo(f'Displayed {msg_in.target_label}')
 
 
@@ -545,10 +545,11 @@ def display_path(wps,topic_name):
 		pub_path.publish(msg)
 
 # Function to display the target marker (sphere)
-def display_target_marker(target_position, topic_name):
-    rospy.loginfo(f"Displaying target marker on topic {topic_name}")
-    # Ensure the publisher is initialized
-    pub_marker = rospy.Publisher(topic_name, Marker, queue_size=10, latch=True)
+def display_target_marker(target_position):
+    rospy.loginfo(f"Displaying target marker on /visualization_marker")
+    
+    # Ensure the publisher is initialized with the /visualization_marker topic
+    pub_marker = rospy.Publisher('/visualization_marker', Marker, queue_size=10, latch=True)
     
     # Create the Marker message for the sphere
     marker = Marker()
@@ -584,8 +585,9 @@ def display_target_marker(target_position, topic_name):
     # Set lifetime to 0, so the marker remains in RViz
     marker.lifetime = rospy.Duration(0)
 
-    # Publish the sphere marker
+    # Publish the sphere marker to the /visualization_marker topic
     pub_marker.publish(marker)
+
 
 # Function to display the target name (text marker)
 def display_target_name(target_position, topic_name):
@@ -621,13 +623,13 @@ def display_target_name(target_position, topic_name):
     text_marker.color.a = 1.0  # Fully opaque text
     
     # Set the text based on the topic name
-    if topic_name == "guidance/target_position_person":
+    if topic_name == "Person":
         text_marker.text = "Target Person"
-    elif topic_name == "guidance/target_position_backpack":
+    elif topic_name == "Backpack":
         text_marker.text = "Target Backpack"
-    elif topic_name == "guidance/target_position_drone":
+    elif topic_name == "Drone":
         text_marker.text = "Target Drone"
-    elif topic_name == "guidance/target_position_phone":
+    elif topic_name == "Phone":
         text_marker.text = "Target Phone"
     else:
         text_marker.text = topic_name  # Default to the topic name if no match
