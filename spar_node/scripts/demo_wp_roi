@@ -51,6 +51,7 @@ class Guidance():
 
 		# performing ROI flag
 		self.performing_roi = False
+		self.roi_waypoint = 0
 
 		# Landing initialisation flag (to only run aruco_land once)
 		self.aruco_land_initialised = False
@@ -232,8 +233,20 @@ class Guidance():
 				elif self.waypoint_counter < len(self.waypoints):
 					# Generate path plan for next waypoint and send it
 					path_plan_wps = self.path_plan([self.waypoints[self.waypoint_counter - 1], self.waypoints[self.waypoint_counter]])
-					for planned_path in path_plan_wps:
-						self.send_wp(planned_path)
+					# New stuff
+					xd = 0
+					while xd < len(path_plan_wps):
+						if not self.performing_roi:
+							self.send_wp(path_plan_wps[xd])
+							xd += 1
+					#
+
+					# OLD
+					# for planned_path in path_plan_wps:
+					# 	self.send_wp(planned_path)					
+					# for planned_path in path_plan_wps:
+					# 	self.send_wp(planned_path)
+					# If using OLD change uncomment line 324 also
 
 					# Increment waypoint counter
 					self.waypoint_counter += 1
@@ -308,7 +321,7 @@ class Guidance():
 
 		# "waypoint_counter" represents the "next waypoint"; "waypoint_counter - 1" represents the "current waypoint"
 		rospy.loginfo("Resuming flight plan from waypoint %i!" % (self.waypoint_counter - 1))
-		self.send_wp(self.waypoints[self.waypoint_counter - 1])
+		# self.send_wp(self.waypoints[self.waypoint_counter - 1]) 
 
 		self.roi_counter += 1 # incriment roi counter (after the return waypoint was sent)
 
