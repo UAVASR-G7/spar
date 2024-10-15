@@ -124,7 +124,7 @@ class Guidance():
 			# Target Detection publisher (to initiate ITA detection)
 			# self.pub_detection_status = rospy.Publisher('/target_detection/stop', Bool, queue_size=10)
 			# marker publisher
-			pub_marker = rospy.Publisher('/visualization_marker', Marker, queue_size=10, latch=True)
+			pub_marker = rospy.Publisher('/visualization_marker', Marker, queue_size=10)
 			
 			##### NEW #######
 			# 
@@ -615,7 +615,7 @@ def display_target_marker(target_position,target_name_str):
     rospy.loginfo(f"Displaying target marker on /visualization_marker")
     
     # Ensure the publisher is initialized with the /visualization_marker topic
-    pub_marker = rospy.Publisher('/visualization_marker', Marker, queue_size=10, latch=True)
+    pub_marker = rospy.Publisher('/visualization_marker', Marker, queue_size=10)
     
     # Create the Marker message for the sphere
     marker = Marker()
